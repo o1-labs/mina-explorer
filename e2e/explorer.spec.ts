@@ -252,7 +252,7 @@ test.describe('Network Picker', () => {
     // Click on network selector dropdown (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await expect(networkButton).toBeVisible();
     await networkButton.click();
@@ -292,7 +292,7 @@ test.describe('Network Picker', () => {
     // Click on network selector (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -325,7 +325,7 @@ test.describe('Network Picker', () => {
     // Click on network selector (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -349,7 +349,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -401,7 +401,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -422,7 +422,7 @@ test.describe('Network Picker', () => {
     // Switch to Mainnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -471,7 +471,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 

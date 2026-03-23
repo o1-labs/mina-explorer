@@ -107,7 +107,7 @@ test.describe('Network Endpoints Integration', () => {
       // Switch to Mainnet
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -153,7 +153,7 @@ test.describe('Network Endpoints Integration', () => {
       // Switch to Devnet
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Devnet")').first().click();
@@ -202,7 +202,7 @@ test.describe('Network Endpoints Integration', () => {
       // Switch to Mainnet
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -242,7 +242,7 @@ test.describe('Network Endpoints Integration', () => {
       await page.goto('/');
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -275,7 +275,7 @@ test.describe('Network Endpoints Integration', () => {
       await page.goto('/');
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
