@@ -202,6 +202,19 @@ async function handleArchiveRequest(route: Route): Promise<void> {
       query.includes('blocks') &&
       (query.includes('userCommands') || query.includes('zkappCommands'))
     ) {
+      // Check if this is an account transactions query (looking for specific limit like 500)
+      const variables = body.variables || {};
+      if (variables.limit === 500 || variables.limit >= 100) {
+        // This is likely an account transactions query
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(FIXTURE_DATA.accountTransactions),
+        });
+        return;
+      }
+
+      // Otherwise, it's a block detail query
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

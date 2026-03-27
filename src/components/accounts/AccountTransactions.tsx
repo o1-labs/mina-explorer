@@ -6,6 +6,7 @@ import { HashLink, Amount, LoadingSpinner } from '@/components/common';
 import { formatNumber, formatTimeAgo, decodeMemo } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import type { AccountTransaction } from '@/services/api/transactions';
+import { TransactionExportButton } from './TransactionExportButton';
 
 interface AccountTransactionsProps {
   publicKey: string;
@@ -37,10 +38,20 @@ export function AccountTransactions({
   return (
     <div className="rounded-lg border border-border bg-card">
       <div className="border-b border-border px-6 py-4">
-        <h3 className="font-semibold">Transaction History</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {transactions.length} transactions found
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold">Transaction History</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {transactions.length} transactions found
+            </p>
+          </div>
+          {transactions.length > 0 && (
+            <TransactionExportButton
+              transactions={transactions}
+              publicKey={publicKey}
+            />
+          )}
+        </div>
       </div>
 
       {transactions.length === 0 ? (
