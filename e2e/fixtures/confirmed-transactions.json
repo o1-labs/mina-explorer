@@ -1,0 +1,107 @@
+{
+  "data": {
+    "bestChain": [
+      {
+        "stateHash": "3NKeMoncuHab5ScarV5ViyF16cJPT4taWNSaTLS64Dp67wuXigPZ",
+        "protocolState": {
+          "consensusState": {
+            "blockHeight": "432148"
+          },
+          "blockchainState": {
+            "date": "1738670640000"
+          }
+        },
+        "transactions": {
+          "userCommands": [],
+          "zkappCommands": []
+        }
+      },
+      {
+        "stateHash": "3NKaBxR5XG6Sdc8q5CXH1TbXgMCCKjhxGLpRuVkTAqAd1bKg7nPf",
+        "protocolState": {
+          "consensusState": {
+            "blockHeight": "432149"
+          },
+          "blockchainState": {
+            "date": "1738670820000"
+          }
+        },
+        "transactions": {
+          "userCommands": [
+            {
+              "hash": "CkpZwt2Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWr",
+              "kind": "PAYMENT",
+              "from": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+              "to": "B62qoG5Yk4iVxpyczUrBNpwtx2xunPhxfG7yYA3xYBPJeRbABxvWC3K",
+              "amount": "2500000000",
+              "fee": "15000000",
+              "memo": "E4YmF9dJ7jBXyD2dKPGRfEtYsZ82fQ2UL3bpB3YVuTCxkcZ6YqVKd",
+              "nonce": 789,
+              "failureReason": null
+            }
+          ],
+          "zkappCommands": []
+        }
+      },
+      {
+        "stateHash": "3NKrE8zVUWyHNvM4KTCpL2abJ8ZwLUjJmcCgwTuXA5qF4RkShVhN",
+        "protocolState": {
+          "consensusState": {
+            "blockHeight": "432150"
+          },
+          "blockchainState": {
+            "date": "1738671000000"
+          }
+        },
+        "transactions": {
+          "userCommands": [
+            {
+              "hash": "CkpZwt1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWp",
+              "kind": "PAYMENT",
+              "from": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+              "to": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+              "amount": "1000000000",
+              "fee": "10000000",
+              "memo": "E4YmF9dJ7jBXyD2dKPGRfEtYsZ82fQ2UL3bpB3YVuTCxkcZ6YqVKd",
+              "nonce": 123,
+              "failureReason": null
+            },
+            {
+              "hash": "CkpZwt1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWq",
+              "kind": "STAKE_DELEGATION",
+              "from": "B62qoG5Yk4iVxpyczUrBNpwtx2xunPhxfG7yYA3xYBPJeRbABxvWC3K",
+              "to": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+              "amount": "0",
+              "fee": "5000000",
+              "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4YNTv97JEVmSiaqifp",
+              "nonce": 456,
+              "failureReason": null
+            }
+          ],
+          "zkappCommands": [
+            {
+              "hash": "5JuZkApp8jyKPXgVcNnQxD9JKMVLR4GzTxNHr6FqE3mYBdWy7ScPv",
+              "failureReasons": null,
+              "zkappCommand": {
+                "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4YNTv97JEVmSiaqifp",
+                "feePayer": {
+                  "body": {
+                    "publicKey": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+                    "fee": "100000000"
+                  }
+                },
+                "accountUpdates": [
+                  {
+                    "body": {
+                      "publicKey": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

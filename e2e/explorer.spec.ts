@@ -1089,3 +1089,104 @@ test.describe('Analytics Page', () => {
     });
   });
 });
+
+test.describe('Transactions Page', () => {
+  test('shows confirmed transactions by default', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Page title
+    await expect(page.locator('h1')).toContainText('Transactions');
+
+    // Confirmed tab should be active
+    const confirmedTab = page
+      .locator('button')
+      .filter({ hasText: 'Confirmed' });
+    await expect(confirmedTab).toBeVisible();
+
+    // Should show transaction table
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+
+    // Table should have expected columns
+    await expect(page.locator('th:has-text("Type")')).toBeVisible();
+    await expect(page.locator('th:has-text("Hash")')).toBeVisible();
+    await expect(page.locator('th:has-text("From")')).toBeVisible();
+    await expect(page.locator('th:has-text("Block")')).toBeVisible();
+  });
+
+  test('confirmed tab shows transaction rows', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Wait for table to load
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+
+    // Should have at least one transaction row
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test('can switch to mempool tab', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Click mempool tab
+    await page.locator('button').filter({ hasText: 'Mempool' }).click();
+
+    // Should show mempool sub-tabs
+    await expect(
+      page.locator('button').filter({ hasText: /User Transactions/ }),
+    ).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      page.locator('button').filter({ hasText: /zkApp Commands/ }),
+    ).toBeVisible();
+  });
+
+  test('can switch between tabs', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Wait for confirmed tab to load
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+
+    // Switch to mempool
+    await page.locator('button').filter({ hasText: 'Mempool' }).click();
+    await expect(
+      page.locator('button').filter({ hasText: /User Transactions/ }),
+    ).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Switch back to confirmed
+    await page.locator('button').filter({ hasText: 'Confirmed' }).click();
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('shows type badges for transactions', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Wait for table to load
+    await expect(page.locator('tbody tr').first()).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Should show payment or delegation type badges
+    const typeBadge = page.locator('tbody span').filter({
+      hasText: /payment|delegation|zkapp/i,
+    });
+    await expect(typeBadge.first()).toBeVisible();
+  });
+
+  test('transactions page navigation link works', async ({ page }) => {
+    await page.goto('/');
+
+    // Click transactions link in navigation
+    await page
+      .locator('nav a')
+      .filter({ hasText: 'Transactions' })
+      .first()
+      .click();
+
+    // Should navigate to transactions page
+    await expect(page).toHaveURL(/\/transactions/);
+    await expect(page.locator('h1')).toContainText('Transactions');
+  });
+});

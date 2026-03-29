@@ -32,8 +32,8 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     name: 'mesa',
     displayName: 'Mesa',
     archiveEndpoint: 'https://mesa-archive-node-api.gcp.o1test.net',
-    // Mesa uses devnet daemon for now (no dedicated mesa daemon endpoint)
-    daemonEndpoint: 'https://devnet-plain-1.gcp.o1test.net/graphql',
+    daemonEndpoint:
+      'https://plain-1-graphql.mina-mesa-network.gcp.o1test.net/graphql',
     isTestnet: true,
     otherExplorers: [
       {

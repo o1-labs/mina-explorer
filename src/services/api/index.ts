@@ -9,6 +9,11 @@ export {
 } from './blocks';
 export { fetchAccount } from './accounts';
 export {
+  fetchRecentTransactions,
+  type ConfirmedTransaction,
+  type RecentTransactionsResult,
+} from './transactions';
+export {
   fetchBlocksForAnalytics,
   calculateNetworkAnalytics,
   aggregateDailyStats,

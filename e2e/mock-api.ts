@@ -257,26 +257,53 @@ async function handleDaemonRequest(route: Route): Promise<void> {
     const body = JSON.parse(postData);
     const query = body.query || '';
 
+    // Handle bestChain queries (daemon transaction listing)
+    // Must be checked before 'account' since bestChain queries contain 'accountUpdates'
+    if (query.includes('bestChain')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FIXTURE_DATA.confirmedTransactions),
+      });
+      return;
+    }
+
+    // Handle daemon block(height) queries
+    if (query.includes('block(height')) {
+      const chain = FIXTURE_DATA.confirmedTransactions.data.bestChain;
+      const block = chain[chain.length - 1]; // newest block
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            block: {
+              transactions: {
+                coinbase: '720000000000',
+                ...block.transactions,
+                feeTransfer: [],
+              },
+            },
+          },
+        }),
+      });
+      return;
+    }
+
     // Handle account queries
     if (query.includes('account')) {
       const variables = body.variables || {};
       const publicKey = variables.publicKey;
 
-      // Return null for invalid accounts
       if (publicKey === FIXTURES.accounts.invalidAccount) {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            data: {
-              account: null,
-            },
-          }),
+          body: JSON.stringify({ data: { account: null } }),
         });
         return;
       }
 
-      // Return fixture account data
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

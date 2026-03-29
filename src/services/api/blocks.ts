@@ -1,4 +1,5 @@
 import { getClient } from './client';
+import { queryDaemon, isDaemonUnavailableError } from './daemon';
 import type { BlockSummary, BlockDetail, NetworkState } from '@/types';
 
 // Full query with protocolState, networkState, and transaction counts
@@ -592,40 +593,211 @@ export async function fetchBlocksPaginated(
   };
 }
 
+interface DaemonBlockResponse {
+  block: {
+    stateHash: string;
+    dateTime: string;
+    protocolState: {
+      consensusState: {
+        blockHeight: string;
+        epoch: string;
+        slot: string;
+      };
+      previousStateHash: string;
+    };
+    transactions: {
+      coinbase: string;
+      userCommands: Array<{
+        hash: string;
+        kind: string;
+        from: string;
+        to: string;
+        amount: string;
+        fee: string;
+        memo: string;
+        nonce: number;
+        failureReason: string | null;
+      }>;
+      zkappCommands: Array<{
+        hash: string;
+        failureReasons: Array<{ failures: string[] }> | null;
+        zkappCommand: {
+          memo: string;
+          feePayer: {
+            body: {
+              publicKey: string;
+              fee: string;
+            };
+          };
+          accountUpdates: Array<{
+            body: {
+              publicKey: string;
+              tokenId: string;
+              balanceChange: {
+                magnitude: string;
+                sgn: string;
+              };
+            };
+          }>;
+        };
+      }>;
+      feeTransfer: Array<{
+        recipient: string;
+        fee: string;
+        type: string;
+      }>;
+    };
+  };
+}
+
+async function fetchBlockTransactionsFromDaemon(
+  blockHeight: number,
+): Promise<BlockDetail['transactions'] | null> {
+  const query = `{
+    block(height: ${blockHeight}) {
+      transactions {
+        coinbase
+        userCommands {
+          hash
+          kind
+          from
+          to
+          amount
+          fee
+          memo
+          nonce
+          failureReason
+        }
+        zkappCommands {
+          hash
+          failureReasons {
+            failures
+          }
+          zkappCommand {
+            memo
+            feePayer {
+              body {
+                publicKey
+                fee
+              }
+            }
+            accountUpdates {
+              body {
+                publicKey
+                tokenId
+                balanceChange {
+                  magnitude
+                  sgn
+                }
+              }
+            }
+          }
+        }
+        feeTransfer {
+          recipient
+          fee
+          type
+        }
+      }
+    }
+  }`;
+
+  try {
+    const data = await queryDaemon<DaemonBlockResponse>(query);
+    const txs = data.block.transactions;
+    return {
+      userCommands: (txs.userCommands || []).map(cmd => ({
+        hash: cmd.hash,
+        kind: cmd.kind,
+        from: cmd.from,
+        to: cmd.to,
+        amount: cmd.amount,
+        fee: cmd.fee,
+        memo: cmd.memo,
+        nonce: cmd.nonce,
+        failureReason: cmd.failureReason,
+        dateTime: '',
+      })),
+      zkappCommands: (txs.zkappCommands || []).map(cmd => ({
+        hash: cmd.hash,
+        zkappCommand: {
+          memo: cmd.zkappCommand.memo,
+          feePayer: cmd.zkappCommand.feePayer,
+          accountUpdates: cmd.zkappCommand.accountUpdates.map(u => ({
+            body: {
+              publicKey: u.body.publicKey,
+              tokenId: u.body.tokenId,
+              balanceChange: u.body.balanceChange,
+              callDepth: 0,
+            },
+          })),
+        },
+        failureReason: cmd.failureReasons?.flatMap(fr => fr.failures) || null,
+        dateTime: '',
+      })),
+      feeTransfer: (txs.feeTransfer || []).map(ft => ({
+        recipient: ft.recipient,
+        fee: ft.fee,
+        type: ft.type,
+      })),
+      coinbase: txs.coinbase,
+    };
+  } catch (error) {
+    if (isDaemonUnavailableError(error)) {
+      console.log(
+        '[API] Daemon unavailable for block transactions, skipping...',
+      );
+      return null;
+    }
+    console.log('[API] Daemon block query failed:', error);
+    return null;
+  }
+}
+
 export async function fetchBlockByHeight(
   blockHeight: number,
 ): Promise<BlockDetail | null> {
   const client = getClient();
 
-  // Try detailed query first
+  // Get basic block info from archive (works for all blocks)
+  let block: BlockDetail | null = null;
   try {
     const data = await client.query<BlockDetailResponse>(BLOCK_DETAIL_QUERY, {
       blockHeightGte: blockHeight,
       blockHeightLt: blockHeight + 1,
     });
-    if (data.blocks.length === 0) {
-      return null;
+    if (data.blocks.length > 0) {
+      const canonicalMax =
+        data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
+      block = mapApiBlockToDetail(data.blocks[0], canonicalMax);
     }
-    const canonicalMax =
-      data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
-    return mapApiBlockToDetail(data.blocks[0], canonicalMax);
-  } catch (error) {
-    // Fallback to basic query if detailed query fails
-    console.log(
-      '[API] Detailed block query failed, trying basic query...',
-      error,
-    );
-    const data = await client.query<BlocksResponse>(BLOCK_BY_HEIGHT_QUERY, {
-      blockHeightGte: blockHeight,
-      blockHeightLt: blockHeight + 1,
-    });
-    if (data.blocks.length === 0) {
-      return null;
+  } catch {
+    try {
+      const data = await client.query<BlocksResponse>(BLOCK_BY_HEIGHT_QUERY, {
+        blockHeightGte: blockHeight,
+        blockHeightLt: blockHeight + 1,
+      });
+      if (data.blocks.length > 0) {
+        const canonicalMax =
+          data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
+        block = mapBasicBlockToDetail(data.blocks[0], canonicalMax);
+      }
+    } catch (archiveError) {
+      console.log('[API] Archive block query failed:', archiveError);
     }
-    const canonicalMax =
-      data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
-    return mapBasicBlockToDetail(data.blocks[0], canonicalMax);
   }
+
+  if (!block) {
+    return null;
+  }
+
+  // Try to enrich with transaction data from daemon
+  const daemonTxs = await fetchBlockTransactionsFromDaemon(blockHeight);
+  if (daemonTxs) {
+    block.transactions = daemonTxs;
+  }
+
+  return block;
 }
 
 export async function fetchBlockByHash(
