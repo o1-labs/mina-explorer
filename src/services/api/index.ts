@@ -9,8 +9,10 @@ export {
 } from './blocks';
 export { fetchAccount } from './accounts';
 export {
+  fetchTransactionsPaginated,
   fetchRecentTransactions,
   type ConfirmedTransaction,
+  type TransactionsPageResult,
   type RecentTransactionsResult,
 } from './transactions';
 export {
