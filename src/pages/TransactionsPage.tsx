@@ -10,7 +10,7 @@ import {
 import { HashLink, Amount, LoadingSpinner } from '@/components/common';
 import { TransactionList } from '@/components/transactions';
 import {
-  useRecentTransactions,
+  usePaginatedTransactions,
   usePendingTransactions,
   usePendingZkAppCommands,
   useNetwork,
@@ -30,17 +30,16 @@ export function TransactionsPage(): ReactNode {
 
   const {
     transactions: confirmedTxs,
-    allTransactions,
     loading: confirmedLoading,
     error: confirmedError,
-    blocksScanned,
+    totalBlockHeight,
     page,
     totalPages,
     goToPage,
     nextPage,
     prevPage,
     refresh: refreshConfirmed,
-  } = useRecentTransactions(30);
+  } = usePaginatedTransactions(50);
 
   const {
     transactions: pendingTxs,
@@ -64,10 +63,10 @@ export function TransactionsPage(): ReactNode {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Transactions</h1>
-          {activeTab === 'confirmed' && blocksScanned > 0 && (
+          {activeTab === 'confirmed' && totalBlockHeight > 0 && (
             <p className="text-sm text-muted-foreground">
-              {formatNumber(allTransactions.length)} transactions from last{' '}
-              {blocksScanned} blocks on {network.displayName}
+              {formatNumber(totalBlockHeight)} total blocks on{' '}
+              {network.displayName}
             </p>
           )}
           {activeTab === 'mempool' && (

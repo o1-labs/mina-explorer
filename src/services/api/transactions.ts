@@ -529,6 +529,221 @@ export interface ConfirmedTransaction {
   failureReason?: string | null | undefined;
 }
 
+export interface TransactionsPageResult {
+  transactions: ConfirmedTransaction[];
+  hasMore: boolean;
+  nextCursor: number | null;
+  totalBlockHeight: number;
+}
+
+// Archive queries for confirmed transactions (requires Archive-Node-API PR 148+)
+const TRANSACTIONS_ARCHIVE_QUERY = `
+  query GetTransactions($limit: Int!) {
+    blocks(
+      limit: $limit
+      sortBy: BLOCKHEIGHT_DESC
+    ) {
+      blockHeight
+      dateTime
+      transactions {
+        userCommands {
+          hash
+          kind
+          from
+          to
+          amount
+          fee
+          memo
+          nonce
+          status
+          failureReason
+        }
+        zkappCommands {
+          hash
+          feePayer
+          fee
+          memo
+          status
+          failureReason
+        }
+      }
+    }
+    networkState {
+      maxBlockHeight {
+        canonicalMaxBlockHeight
+        pendingMaxBlockHeight
+      }
+    }
+  }
+`;
+
+const TRANSACTIONS_ARCHIVE_QUERY_PAGINATED = `
+  query GetTransactionsPaginated($limit: Int!, $maxBlockHeight: Int!) {
+    blocks(
+      query: { blockHeight_lt: $maxBlockHeight }
+      limit: $limit
+      sortBy: BLOCKHEIGHT_DESC
+    ) {
+      blockHeight
+      dateTime
+      transactions {
+        userCommands {
+          hash
+          kind
+          from
+          to
+          amount
+          fee
+          memo
+          nonce
+          status
+          failureReason
+        }
+        zkappCommands {
+          hash
+          feePayer
+          fee
+          memo
+          status
+          failureReason
+        }
+      }
+    }
+    networkState {
+      maxBlockHeight {
+        canonicalMaxBlockHeight
+        pendingMaxBlockHeight
+      }
+    }
+  }
+`;
+
+interface ArchiveTransactionBlock {
+  blockHeight: number;
+  dateTime: string;
+  transactions: {
+    userCommands: Array<{
+      hash: string;
+      kind: string;
+      from: string;
+      to: string;
+      amount: string;
+      fee: string;
+      memo: string;
+      nonce: number;
+      status: string;
+      failureReason: string | null;
+    }>;
+    zkappCommands: Array<{
+      hash: string;
+      feePayer: string;
+      fee: string;
+      memo: string;
+      status: string;
+      failureReason: string | null;
+    }>;
+  };
+}
+
+interface ArchiveTransactionsResponse {
+  blocks: ArchiveTransactionBlock[];
+  networkState: {
+    maxBlockHeight: {
+      canonicalMaxBlockHeight: number;
+      pendingMaxBlockHeight: number;
+    };
+  };
+}
+
+function flattenArchiveBlocks(
+  blocks: ArchiveTransactionBlock[],
+): ConfirmedTransaction[] {
+  const txs: ConfirmedTransaction[] = [];
+
+  for (const block of blocks) {
+    for (const cmd of block.transactions.userCommands || []) {
+      const kindUpper = cmd.kind.toUpperCase();
+      txs.push({
+        hash: cmd.hash,
+        type: kindUpper === 'STAKE_DELEGATION' ? 'delegation' : 'payment',
+        kind: kindUpper,
+        from: cmd.from,
+        to: cmd.to,
+        amount: cmd.amount,
+        fee: cmd.fee,
+        memo: cmd.memo,
+        nonce: cmd.nonce,
+        blockHeight: block.blockHeight,
+        dateTime: block.dateTime,
+        failureReason: cmd.failureReason,
+      });
+    }
+
+    for (const cmd of block.transactions.zkappCommands || []) {
+      txs.push({
+        hash: cmd.hash,
+        type: 'zkapp',
+        from: cmd.feePayer,
+        fee: cmd.fee,
+        memo: cmd.memo,
+        blockHeight: block.blockHeight,
+        dateTime: block.dateTime,
+        failureReason: cmd.failureReason,
+      });
+    }
+  }
+
+  return txs;
+}
+
+export async function fetchTransactionsPaginated(
+  blocksPerPage: number = 50,
+  beforeHeight?: number,
+): Promise<TransactionsPageResult> {
+  const client = getClient();
+
+  try {
+    const query = beforeHeight
+      ? TRANSACTIONS_ARCHIVE_QUERY_PAGINATED
+      : TRANSACTIONS_ARCHIVE_QUERY;
+    const variables: Record<string, unknown> = { limit: blocksPerPage };
+    if (beforeHeight) {
+      variables.maxBlockHeight = beforeHeight;
+    }
+
+    const data = await client.query<ArchiveTransactionsResponse>(
+      query,
+      variables,
+    );
+    const totalHeight = data.networkState.maxBlockHeight.pendingMaxBlockHeight;
+    const transactions = flattenArchiveBlocks(data.blocks);
+    const lastBlock = data.blocks[data.blocks.length - 1];
+
+    return {
+      transactions,
+      hasMore: lastBlock ? lastBlock.blockHeight > 1 : false,
+      nextCursor: lastBlock ? lastBlock.blockHeight : null,
+      totalBlockHeight: totalHeight,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '';
+    if (msg.includes('Cannot query field')) {
+      // Archive doesn't support transaction fields — fall back to daemon
+      console.log(
+        '[API] Archive does not support transaction fields, falling back to daemon...',
+      );
+      const daemon = await fetchRecentTransactions();
+      return {
+        transactions: daemon.transactions,
+        hasMore: false,
+        nextCursor: null,
+        totalBlockHeight: daemon.newestBlockHeight,
+      };
+    }
+    throw error;
+  }
+}
+
 export interface RecentTransactionsResult {
   transactions: ConfirmedTransaction[];
   blocksScanned: number;

@@ -19,6 +19,7 @@ export {
   useTransaction,
   useAccountTransactions,
   useRecentTransactions,
+  usePaginatedTransactions,
 } from './useTransactions';
 export { usePrice } from './usePrice';
 export { useHistoricalPrice } from './useHistoricalPrice';

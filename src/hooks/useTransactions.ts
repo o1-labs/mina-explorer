@@ -5,6 +5,7 @@ import {
   fetchTransactionByHash,
   fetchAccountTransactions,
   fetchRecentTransactions,
+  fetchTransactionsPaginated,
   type PendingTransaction,
   type PendingZkAppCommand,
   type TransactionDetail,
@@ -273,6 +274,116 @@ export function useRecentTransactions(
     loading,
     error,
     blocksScanned,
+    page,
+    totalPages,
+    goToPage,
+    nextPage,
+    prevPage,
+    refresh,
+  };
+}
+
+interface UsePaginatedTransactionsResult {
+  transactions: ConfirmedTransaction[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  totalBlockHeight: number;
+  page: number;
+  totalPages: number;
+  goToPage: (page: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+  refresh: () => void;
+}
+
+export function usePaginatedTransactions(
+  blocksPerPage: number = 50,
+): UsePaginatedTransactionsResult {
+  const { network } = useNetwork();
+  const [transactions, setTransactions] = useState<ConfirmedTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalBlockHeight, setTotalBlockHeight] = useState(0);
+
+  const totalPages = Math.max(1, Math.ceil(totalBlockHeight / blocksPerPage));
+
+  const loadPage = useCallback(
+    async (pageNum: number, forceRefresh: boolean = false) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        let cursor: number | undefined;
+        if (pageNum > 1 && totalBlockHeight > 0) {
+          cursor = totalBlockHeight - (pageNum - 1) * blocksPerPage + 1;
+          if (cursor <= 0) cursor = undefined;
+        }
+
+        const data = await fetchTransactionsPaginated(blocksPerPage, cursor);
+        setTransactions(data.transactions);
+        setHasMore(data.hasMore);
+
+        if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
+          setTotalBlockHeight(data.totalBlockHeight);
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch transactions',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [blocksPerPage, totalBlockHeight],
+  );
+
+  useEffect(() => {
+    setPage(1);
+    setTotalBlockHeight(0);
+    loadPage(1, true);
+  }, [network.id, blocksPerPage]);
+
+  useEffect(() => {
+    if (totalBlockHeight > 0) {
+      loadPage(page);
+    }
+  }, [page, totalBlockHeight]);
+
+  const goToPage = useCallback(
+    (newPage: number) => {
+      if (newPage >= 1 && newPage <= totalPages) {
+        setPage(newPage);
+      }
+    },
+    [totalPages],
+  );
+
+  const nextPage = useCallback(() => {
+    if (page < totalPages) {
+      setPage(p => p + 1);
+    }
+  }, [page, totalPages]);
+
+  const prevPage = useCallback(() => {
+    if (page > 1) {
+      setPage(p => p - 1);
+    }
+  }, [page]);
+
+  const refresh = useCallback(() => {
+    setPage(1);
+    loadPage(1, true);
+  }, [loadPage]);
+
+  return {
+    transactions,
+    loading,
+    error,
+    hasMore,
+    totalBlockHeight,
     page,
     totalPages,
     goToPage,

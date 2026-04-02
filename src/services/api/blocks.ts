@@ -34,6 +34,7 @@ const BLOCKS_QUERY_FULL = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -63,6 +64,7 @@ const BLOCKS_QUERY_BASIC = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -86,6 +88,7 @@ const BLOCKS_QUERY_MINIMAL = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -206,6 +209,7 @@ const BLOCK_DETAIL_QUERY = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -229,6 +233,7 @@ const BLOCK_BY_HEIGHT_QUERY = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -318,6 +323,7 @@ interface BlockDetailResponse {
   networkState: {
     maxBlockHeight: {
       canonicalMaxBlockHeight: number;
+      pendingMaxBlockHeight: number;
     };
   };
 }
@@ -327,6 +333,7 @@ interface BlocksResponse {
   networkState: {
     maxBlockHeight: {
       canonicalMaxBlockHeight: number;
+      pendingMaxBlockHeight: number;
     };
   };
 }
