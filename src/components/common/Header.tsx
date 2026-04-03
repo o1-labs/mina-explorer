@@ -80,6 +80,7 @@ export function Header(): ReactNode {
 
           {/* Mobile Menu Button */}
           <button
+            data-testid="mobile-menu-button"
             className="rounded-md p-2 text-muted-foreground hover:bg-accent lg:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
@@ -91,7 +92,7 @@ export function Header(): ReactNode {
         <div
           className={cn(
             'overflow-hidden transition-all duration-200 lg:hidden',
-            mobileMenuOpen ? 'max-h-96 pb-4' : 'max-h-0',
+            mobileMenuOpen ? 'max-h-[600px] pb-4' : 'max-h-0',
           )}
         >
           <nav className="flex flex-col gap-2 pt-2">
@@ -143,8 +144,8 @@ export function Header(): ReactNode {
             <SearchBar />
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              <NetworkSelector />
             </div>
+            <NetworkSelector inline />
           </div>
         </div>
       </div>

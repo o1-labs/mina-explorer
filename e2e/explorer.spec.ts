@@ -1186,3 +1186,71 @@ test.describe('Transactions Page', () => {
     await expect(page.locator('h1')).toContainText('Transactions');
   });
 });
+
+test.describe('Mobile Menu', () => {
+  // Hamburger button is the lg:hidden button in the header
+  const hamburger = '[data-testid="mobile-menu-button"]';
+
+  test('network selector is accessible on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Wait for page to load
+    await expect(page.locator('text=Block Height').first()).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Hamburger should be visible on mobile
+    await expect(page.locator(hamburger)).toBeVisible({ timeout: 5000 });
+
+    // Open mobile menu
+    await page.locator(hamburger).click();
+
+    // Wait for menu animation
+    await page.waitForTimeout(300);
+
+    // Network selector button should be visible in mobile menu
+    const networkButton = page.locator(
+      '[data-testid="mobile-network-selector"]',
+    );
+    await expect(networkButton).toBeVisible({ timeout: 5000 });
+
+    // Click to expand network list
+    await networkButton.click();
+
+    // Network options should be visible inline (not clipped)
+    await expect(
+      page.locator('button').filter({ hasText: 'Devnet' }).first(),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      page.locator('button').filter({ hasText: 'Mainnet' }).first(),
+    ).toBeVisible();
+  });
+
+  test('can switch network on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Wait for page to load
+    await expect(page.locator('text=Block Height').first()).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Open mobile menu
+    await expect(page.locator(hamburger)).toBeVisible({ timeout: 5000 });
+    await page.locator(hamburger).click();
+    await page.waitForTimeout(300);
+
+    // Open network selector
+    const networkButton = page.locator(
+      '[data-testid="mobile-network-selector"]',
+    );
+    await networkButton.click();
+
+    // Switch to Devnet
+    await page.locator('button').filter({ hasText: 'Devnet' }).first().click();
+
+    // Verify Devnet is now selected
+    await expect(networkButton).toContainText('Devnet', { timeout: 5000 });
+  });
+});

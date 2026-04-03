@@ -3,7 +3,11 @@ import { ChevronDown, X } from 'lucide-react';
 import { useNetwork } from '@/hooks';
 import { cn } from '@/lib/utils';
 
-export function NetworkSelector(): ReactNode {
+interface NetworkSelectorProps {
+  inline?: boolean;
+}
+
+export function NetworkSelector({ inline }: NetworkSelectorProps): ReactNode {
   const {
     network,
     setNetwork,
@@ -16,8 +20,9 @@ export function NetworkSelector(): ReactNode {
   const [inputValue, setInputValue] = useState(customEndpoint || '');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (not needed for inline mode)
   useEffect(() => {
+    if (inline) return;
     function handleClickOutside(event: MouseEvent): void {
       if (
         dropdownRef.current &&
@@ -29,7 +34,7 @@ export function NetworkSelector(): ReactNode {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [inline]);
 
   const handleCustomSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
@@ -53,6 +58,9 @@ export function NetworkSelector(): ReactNode {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        data-testid={
+          inline ? 'mobile-network-selector' : 'desktop-network-selector'
+        }
         className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -69,7 +77,14 @@ export function NetworkSelector(): ReactNode {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[280px] rounded-md border border-border bg-popover p-1 shadow-lg">
+        <div
+          className={cn(
+            'rounded-md border border-border bg-popover p-1',
+            inline
+              ? 'mt-2'
+              : 'absolute right-0 top-full z-50 mt-2 min-w-[280px] shadow-lg',
+          )}
+        >
           {availableNetworks.map(net => (
             <button
               key={net.id}
