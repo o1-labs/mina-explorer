@@ -3,6 +3,7 @@ export {
   usePaginatedBlocks,
   useBlock,
   useNetworkState,
+  useEpochInfo,
 } from './useBlocks';
 export { useSearch } from './useSearch';
 export { useNetwork } from './useNetwork';

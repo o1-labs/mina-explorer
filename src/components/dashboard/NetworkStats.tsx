@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useNetworkState, useNetwork, useBlocks } from '@/hooks';
+import { useNetworkState, useNetwork, useEpochInfo } from '@/hooks';
 import { formatNumber } from '@/utils/formatters';
 import { LoadingSpinner } from '@/components/common';
 
@@ -24,12 +24,10 @@ function StatCard({
 export function NetworkStats(): ReactNode {
   const { networkState, loading, error } = useNetworkState();
   const { network } = useNetwork();
-  const { blocks } = useBlocks(1);
+  const { epochInfo } = useEpochInfo();
 
-  // Get epoch info from the latest block
-  const latestBlock = blocks?.[0];
-  const epoch = latestBlock?.epoch;
-  const slot = latestBlock?.slot;
+  const epoch = epochInfo?.epoch;
+  const slot = epochInfo?.slot;
   const slotProgress = slot
     ? ((slot / SLOTS_PER_EPOCH) * 100).toFixed(1)
     : null;

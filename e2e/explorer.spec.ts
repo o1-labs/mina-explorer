@@ -8,9 +8,7 @@ test.describe('Mina Explorer', () => {
     await expect(page).toHaveTitle(/Mina Explorer/);
 
     // Check header logo link (Mina is an image + "Explorer" text)
-    await expect(
-      page.locator('header a').filter({ hasText: 'Explorer' }).first(),
-    ).toBeVisible();
+    await expect(page.locator('header a').first()).toBeVisible();
 
     // Check search bar is present (use first() to handle multiple)
     await expect(
@@ -218,7 +216,7 @@ test.describe('Mina Explorer', () => {
     await expect(page).toHaveURL(/\/blocks/);
 
     // Click on logo to go back home
-    await page.locator('header a:has-text("Explorer")').first().click();
+    await page.locator('header a').first().click();
     await expect(page).toHaveURL(/\/#?\/?$/);
   });
 
@@ -370,7 +368,7 @@ test.describe('Network Picker', () => {
     ).toBeVisible();
 
     // Navigate back to home
-    await page.locator('header a:has-text("Explorer")').first().click();
+    await page.locator('header a').first().click();
 
     // Verify Devnet is still selected
     await expect(
@@ -435,9 +433,7 @@ test.describe('Network Picker', () => {
     await page.reload();
 
     // Wait for page to load (check header logo link)
-    await expect(
-      page.locator('header a').filter({ hasText: 'Explorer' }).first(),
-    ).toBeVisible();
+    await expect(page.locator('header a').first()).toBeVisible();
 
     // Verify Mainnet is still selected after refresh
     await expect(

@@ -62,3 +62,51 @@ export function isDaemonUnavailableError(error: unknown): boolean {
 
 /** Max blocks to request from daemon in a single bestChain call */
 export const MAX_DAEMON_BLOCKS = 30;
+
+export interface EpochInfo {
+  epoch: number;
+  slot: number;
+  slotSinceGenesis: number;
+  blockHeight: number;
+}
+
+export async function fetchEpochInfo(): Promise<EpochInfo | null> {
+  try {
+    const data = await queryDaemon<{
+      bestChain: Array<{
+        protocolState: {
+          consensusState: {
+            blockHeight: string;
+            epoch: string;
+            slot: string;
+            slotSinceGenesis: string;
+          };
+        };
+      }>;
+    }>(`{
+      bestChain(maxLength: 1) {
+        protocolState {
+          consensusState {
+            blockHeight
+            epoch
+            slot
+            slotSinceGenesis
+          }
+        }
+      }
+    }`);
+
+    const block = data.bestChain?.[0];
+    if (!block) return null;
+
+    const cs = block.protocolState.consensusState;
+    return {
+      epoch: parseInt(cs.epoch, 10),
+      slot: parseInt(cs.slot, 10),
+      slotSinceGenesis: parseInt(cs.slotSinceGenesis, 10),
+      blockHeight: parseInt(cs.blockHeight, 10),
+    };
+  } catch {
+    return null;
+  }
+}
