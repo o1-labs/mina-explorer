@@ -41,11 +41,6 @@ export const NETWORKS: Record<string, NetworkConfig> = {
         url: 'https://mesa-explorer.vercel.app/',
         description: 'Last 290 blocks only',
       },
-      {
-        name: 'MinaExplorer Mesa',
-        url: 'https://mesa.minaexplorer.com/',
-        description: "Gareth's explorer",
-      },
     ],
   },
   devnet: {

@@ -73,7 +73,7 @@ export function Footer(): ReactNode {
             <ul className="space-y-2 text-sm">
               <li>
                 <a
-                  href="https://github.com/dannywillems/mina-explorer"
+                  href="https://github.com/o1-labs/mina-explorer"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground transition-colors hover:text-foreground"
