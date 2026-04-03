@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 interface HashLinkProps {
   hash: string;
   type: 'block' | 'transaction' | 'account';
+  /** Override the link target (e.g., use block height instead of hash) */
+  linkTo?: string;
   truncate?: boolean;
   prefixLength?: number;
   showCopy?: boolean;
@@ -15,6 +17,7 @@ interface HashLinkProps {
 export function HashLink({
   hash,
   type,
+  linkTo,
   truncate = true,
   prefixLength = 8,
   showCopy = true,
@@ -26,6 +29,8 @@ export function HashLink({
     transaction: `/tx/${hash}`,
     account: `/account/${hash}`,
   };
+
+  const linkPath = linkTo || pathMap[type];
 
   const displayText =
     truncate && type === 'account'
@@ -48,10 +53,7 @@ export function HashLink({
 
   return (
     <span className="inline-flex items-center gap-1">
-      <Link
-        to={pathMap[type]}
-        className="font-mono text-primary hover:underline"
-      >
+      <Link to={linkPath} className="font-mono text-primary hover:underline">
         {displayText}
       </Link>
       {showCopy && (

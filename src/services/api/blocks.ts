@@ -773,39 +773,63 @@ export async function fetchBlockByHeight(
   return block;
 }
 
+const BLOCKS_HASH_SEARCH_QUERY = `
+  query SearchBlockByHash($limit: Int!) {
+    blocks(limit: $limit, sortBy: BLOCKHEIGHT_DESC) {
+      blockHeight
+      stateHash
+    }
+  }
+`;
+
+const BLOCKS_HASH_SEARCH_QUERY_PAGINATED = `
+  query SearchBlockByHashPaginated($limit: Int!, $maxBlockHeight: Int!) {
+    blocks(query: { blockHeight_lt: $maxBlockHeight }, limit: $limit, sortBy: BLOCKHEIGHT_DESC) {
+      blockHeight
+      stateHash
+    }
+  }
+`;
+
+interface HashSearchResponse {
+  blocks: Array<{ blockHeight: number; stateHash: string }>;
+}
+
 export async function fetchBlockByHash(
   stateHash: string,
 ): Promise<BlockDetail | null> {
-  // The API doesn't support querying by stateHash directly
-  // We need to search through recent blocks to find the height, then fetch details
   const client = getClient();
+  const CHUNK_SIZE = 500;
+  const MAX_CHUNKS = 10;
 
-  let data: BlocksResponse;
-  try {
-    data = await client.query<BlocksResponse>(BLOCKS_QUERY_FULL, {
-      limit: 100,
-    });
-  } catch {
-    // Fallback to basic query
-    try {
-      data = await client.query<BlocksResponse>(BLOCKS_QUERY_BASIC, {
-        limit: 100,
-      });
-    } catch {
-      // Fallback to minimal query (mainnet doesn't support userCommands/zkappCommands)
-      data = await client.query<BlocksResponse>(BLOCKS_QUERY_MINIMAL, {
-        limit: 100,
-      });
+  let cursor: number | undefined;
+
+  for (let i = 0; i < MAX_CHUNKS; i++) {
+    const query = cursor
+      ? BLOCKS_HASH_SEARCH_QUERY_PAGINATED
+      : BLOCKS_HASH_SEARCH_QUERY;
+    const variables: Record<string, unknown> = { limit: CHUNK_SIZE };
+    if (cursor) {
+      variables.maxBlockHeight = cursor;
     }
+
+    const data = await client.query<HashSearchResponse>(query, variables);
+
+    const match = data.blocks.find(b => b.stateHash === stateHash);
+    if (match) {
+      return fetchBlockByHeight(match.blockHeight);
+    }
+
+    // No more blocks to search
+    if (data.blocks.length < CHUNK_SIZE) {
+      break;
+    }
+
+    // Move cursor to oldest block in this chunk
+    cursor = data.blocks[data.blocks.length - 1].blockHeight;
   }
 
-  const block = data.blocks.find(b => b.stateHash === stateHash);
-  if (!block) {
-    return null;
-  }
-
-  // Fetch full block details by height
-  return fetchBlockByHeight(block.blockHeight);
+  return null;
 }
 
 export async function fetchNetworkState(): Promise<NetworkState> {
