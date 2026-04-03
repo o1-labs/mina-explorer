@@ -269,13 +269,57 @@ async function handleDaemonRequest(route: Route): Promise<void> {
     const body = JSON.parse(postData);
     const query = body.query || '';
 
-    // Handle bestChain queries (daemon transaction listing)
+    // Handle bestChain queries (daemon epoch info + transaction listing)
     // Must be checked before 'account' since bestChain queries contain 'accountUpdates'
     if (query.includes('bestChain')) {
+      // Epoch info query (small bestChain with protocolState)
+      if (query.includes('epoch') || query.includes('slot')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: {
+              bestChain: [
+                {
+                  protocolState: {
+                    consensusState: {
+                      blockHeight: '432150',
+                      epoch: '61',
+                      slot: '3570',
+                      slotSinceGenesis: '436710',
+                    },
+                  },
+                },
+              ],
+            },
+          }),
+        });
+        return;
+      }
+
+      // Transaction listing query — return confirmed transactions fixture
+      // Remap archive format to daemon bestChain format
+      const blocks = FIXTURE_DATA.confirmedTransactions.data.blocks;
+      const bestChain = blocks.map(
+        (b: {
+          blockHeight: number;
+          dateTime: string;
+          transactions: object;
+        }) => ({
+          stateHash: `3NK${b.blockHeight}`,
+          protocolState: {
+            consensusState: { blockHeight: String(b.blockHeight) },
+            blockchainState: {
+              date: String(new Date(b.dateTime).getTime()),
+            },
+          },
+          transactions: b.transactions,
+        }),
+      );
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(FIXTURE_DATA.confirmedTransactions),
+        body: JSON.stringify({ data: { bestChain } }),
       });
       return;
     }
