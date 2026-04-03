@@ -150,7 +150,7 @@ const BLOCKS_QUERY_PAGINATED_MINIMAL = `
   }
 `;
 
-// Full block detail query with transactions
+// Full block detail query with transactions (archive flat format)
 const BLOCK_DETAIL_QUERY = `
   query GetBlockByHeight($blockHeightGte: Int!, $blockHeightLt: Int!) {
     blocks(
@@ -176,28 +176,11 @@ const BLOCK_DETAIL_QUERY = `
         }
         zkappCommands {
           hash
-          failureReasons {
-            failures
-          }
-          zkappCommand {
-            memo
-            feePayer {
-              body {
-                publicKey
-                fee
-              }
-            }
-            accountUpdates {
-              body {
-                publicKey
-                tokenId
-                balanceChange {
-                  magnitude
-                  sgn
-                }
-              }
-            }
-          }
+          feePayer
+          fee
+          memo
+          status
+          failureReason
         }
         feeTransfer {
           recipient
@@ -289,26 +272,11 @@ interface ApiBlockDetail {
     }>;
     zkappCommands?: Array<{
       hash: string;
-      failureReasons: Array<{ failures: string[] }> | null;
-      zkappCommand: {
-        memo: string;
-        feePayer: {
-          body: {
-            publicKey: string;
-            fee: string;
-          };
-        };
-        accountUpdates: Array<{
-          body: {
-            publicKey: string;
-            tokenId: string;
-            balanceChange: {
-              magnitude: string;
-              sgn: string;
-            };
-          };
-        }>;
-      };
+      feePayer: string;
+      fee: string;
+      memo: string;
+      status: string;
+      failureReason: string | null;
     }>;
     feeTransfer?: Array<{
       recipient: string;
@@ -420,18 +388,16 @@ function mapApiBlockToDetail(
       zkappCommands: (block.transactions.zkappCommands || []).map(cmd => ({
         hash: cmd.hash,
         zkappCommand: {
-          memo: cmd.zkappCommand.memo,
-          feePayer: cmd.zkappCommand.feePayer,
-          accountUpdates: cmd.zkappCommand.accountUpdates.map(update => ({
+          memo: cmd.memo,
+          feePayer: {
             body: {
-              publicKey: update.body.publicKey,
-              tokenId: update.body.tokenId,
-              balanceChange: update.body.balanceChange,
-              callDepth: 0,
+              publicKey: cmd.feePayer,
+              fee: cmd.fee,
             },
-          })),
+          },
+          accountUpdates: [],
         },
-        failureReason: cmd.failureReasons?.flatMap(fr => fr.failures) || null,
+        failureReason: cmd.failureReason ? [cmd.failureReason] : null,
         dateTime: block.dateTime,
       })),
       feeTransfer: (block.transactions.feeTransfer || []).map(ft => ({
