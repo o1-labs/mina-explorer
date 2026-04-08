@@ -159,6 +159,7 @@ const BLOCK_DETAIL_QUERY = `
     ) {
       blockHeight
       stateHash
+      parentHash
       creator
       dateTime
       transactions {
@@ -198,7 +199,8 @@ const BLOCK_DETAIL_QUERY = `
   }
 `;
 
-// Fallback query without full transaction details
+// Fallback query without full transaction details (no parentHash for
+// archive nodes that haven't been updated with the parentHash field yet)
 const BLOCK_BY_HEIGHT_QUERY = `
   query GetBlockByHeight($blockHeightGte: Int!, $blockHeightLt: Int!) {
     blocks(
@@ -255,6 +257,7 @@ interface ApiBlock {
 interface ApiBlockDetail {
   blockHeight: number;
   stateHash: string;
+  parentHash?: string;
   creator: string;
   dateTime: string;
   transactions: {
@@ -355,7 +358,7 @@ function mapApiBlockToDetail(
   return {
     blockHeight: block.blockHeight,
     stateHash: block.stateHash,
-    parentHash: '',
+    parentHash: block.parentHash ?? '',
     creator: block.creator,
     creatorAccount: { publicKey: block.creator },
     dateTime: block.dateTime,
@@ -370,7 +373,7 @@ function mapApiBlockToDetail(
         slot: 0,
         blockHeight: block.blockHeight,
       },
-      previousStateHash: '',
+      previousStateHash: block.parentHash ?? '',
     },
     transactions: {
       userCommands: (block.transactions.userCommands || []).map(cmd => ({
@@ -623,26 +626,14 @@ interface DaemonBlockResponse {
   };
 }
 
-async function fetchBlockTransactionsFromDaemon(
-  blockHeight: number,
-): Promise<BlockDetail['transactions'] | null> {
-  const query = `{
-    block(height: ${blockHeight}) {
-      transactions {
-        coinbase
-        userCommands {
-          hash
-          kind
-          from
-          to
-          amount
-          fee
-          memo
-          nonce
-          failureReason
-        }
-        zkappCommands {
-          hash
+interface DaemonBlockData {
+  transactions: BlockDetail['transactions'];
+  previousStateHash: string;
+}
+
+function buildDaemonBlockQuery(blockHeight: number, full: boolean): string {
+  const zkappFields = full
+    ? `hash
           failureReasons {
             failures
           }
@@ -664,7 +655,48 @@ async function fetchBlockTransactionsFromDaemon(
                 }
               }
             }
-          }
+          }`
+    : `hash
+          zkappCommand {
+            memo
+            feePayer {
+              body {
+                publicKey
+                fee
+              }
+            }
+            accountUpdates {
+              body {
+                publicKey
+                tokenId
+                balanceChange {
+                  magnitude
+                  sgn
+                }
+              }
+            }
+          }`;
+
+  return `{
+    block(height: ${blockHeight}) {
+      protocolState {
+        previousStateHash
+      }
+      transactions {
+        coinbase
+        userCommands {
+          hash
+          kind
+          from
+          to
+          amount
+          fee
+          memo
+          nonce
+          failureReason
+        }
+        zkappCommands {
+          ${zkappFields}
         }
         feeTransfer {
           recipient
@@ -674,11 +706,14 @@ async function fetchBlockTransactionsFromDaemon(
       }
     }
   }`;
+}
 
-  try {
-    const data = await queryDaemon<DaemonBlockResponse>(query);
-    const txs = data.block.transactions;
-    return {
+function mapDaemonResponse(data: DaemonBlockResponse): DaemonBlockData {
+  const txs = data.block.transactions;
+  const previousStateHash = data.block.protocolState?.previousStateHash ?? '';
+  return {
+    previousStateHash,
+    transactions: {
       userCommands: (txs.userCommands || []).map(cmd => ({
         hash: cmd.hash,
         kind: cmd.kind,
@@ -714,17 +749,38 @@ async function fetchBlockTransactionsFromDaemon(
         type: ft.type,
       })),
       coinbase: txs.coinbase,
-    };
-  } catch (error) {
-    if (isDaemonUnavailableError(error)) {
-      console.log(
-        '[API] Daemon unavailable for block transactions, skipping...',
-      );
+    },
+  };
+}
+
+async function fetchBlockDataFromDaemon(
+  blockHeight: number,
+): Promise<DaemonBlockData | null> {
+  // Try full query first, then fall back to simplified (without failureReasons
+  // which some daemon versions don't support on ZkappCommandResult)
+  for (const full of [true, false]) {
+    try {
+      const query = buildDaemonBlockQuery(blockHeight, full);
+      const data = await queryDaemon<DaemonBlockResponse>(query);
+      return mapDaemonResponse(data);
+    } catch (error) {
+      if (isDaemonUnavailableError(error)) {
+        console.log(
+          '[API] Daemon unavailable for block transactions, skipping...',
+        );
+        return null;
+      }
+      if (full) {
+        console.log(
+          '[API] Full daemon block query failed, trying simplified...',
+        );
+        continue;
+      }
+      console.log('[API] Daemon block query failed:', error);
       return null;
     }
-    console.log('[API] Daemon block query failed:', error);
-    return null;
   }
+  return null;
 }
 
 export async function fetchBlockByHeight(
@@ -764,10 +820,14 @@ export async function fetchBlockByHeight(
     return null;
   }
 
-  // Try to enrich with transaction data from daemon
-  const daemonTxs = await fetchBlockTransactionsFromDaemon(blockHeight);
-  if (daemonTxs) {
-    block.transactions = daemonTxs;
+  // Try to enrich with transaction data and parentHash from daemon
+  const daemonData = await fetchBlockDataFromDaemon(blockHeight);
+  if (daemonData) {
+    block.transactions = daemonData.transactions;
+    if (!block.parentHash && daemonData.previousStateHash) {
+      block.parentHash = daemonData.previousStateHash;
+      block.protocolState.previousStateHash = daemonData.previousStateHash;
+    }
   }
 
   return block;
