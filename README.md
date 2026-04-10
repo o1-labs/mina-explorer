@@ -126,11 +126,13 @@ npx playwright test e2e/explorer.spec.ts -g "test name pattern"
 TEST_DEPLOYED=true npx playwright test
 ```
 
-## Deployment
+## Releases & Deployment
 
-The explorer is deployed to GitHub Pages via CI on push to `main`. The base path is `/mina-explorer/` for the GitHub Pages subdirectory.
+Every push to `main` builds the explorer, deploys it to GitHub Pages, cuts a semver-bumped GitHub release with a downloadable build artifact, and posts an announcement to `#platform-eng-team`. The release tag is auto-bumped from conventional-commit prefixes (`feat:` → minor, `fix:` → patch, `feat!:` → major).
 
-The deploy workflow runs: typecheck → build → upload to GitHub Pages.
+To trigger a release manually or override the auto-tag, use **Actions → Deploy to GitHub Pages → Run workflow**. To skip a release on a particular push, include `[skip release]` in the commit message.
+
+See [`RELEASES.md`](RELEASES.md) for the full reference (commit prefix rules, self-hosting, manual override, Slack setup, CODEOWNERS gate).
 
 ## Contributing
 
