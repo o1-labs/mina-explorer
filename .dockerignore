@@ -1,0 +1,21 @@
+# .dockerignore — allowlist-only.
+# Excludes everything by default and re-includes only the files the build
+# stage actually consumes. This keeps the build context tiny and prevents
+# accidentally shipping .git, node_modules, dist, secrets, or test fixtures.
+
+**
+
+# Files needed by the Dockerfile (build stage)
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+!index.html
+!public
+!public/**
+!src
+!src/**
+
+# Files needed by the Dockerfile (runtime stage)
+!docker
+!docker/**

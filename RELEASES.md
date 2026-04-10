@@ -61,9 +61,11 @@ mkdir mina-explorer && tar -xzf mina-explorer-${TAG}.tar.gz -C mina-explorer
 
 ### Base path
 
-The build hard-codes `base: '/mina-explorer/'` in `vite.config.ts` so it matches the GitHub Pages subdirectory. To self-host you have two options:
+The default build sets `base: '/mina-explorer/'` in `vite.config.ts` to match the GitHub Pages subdirectory. The base is now env-driven via `VITE_BASE_PATH` — pass `VITE_BASE_PATH=/` at build time to serve the explorer at the root instead. To self-host you have three options:
 
-1. **Serve under `/mina-explorer/`** (simplest). Example nginx:
+1. **Use the container image** (simplest — see "Container image" below). The image is built with `VITE_BASE_PATH=/` so it serves at `http://host:8080/` directly.
+
+2. **Serve the tarball under `/mina-explorer/`**. Example nginx:
 
    ```nginx
    location /mina-explorer/ {
@@ -72,9 +74,105 @@ The build hard-codes `base: '/mina-explorer/'` in `vite.config.ts` so it matches
    }
    ```
 
-2. **Rebuild from source** with a different base — clone the repo, edit `vite.config.ts` (`base: '/'`), `npx vite build`, serve the resulting `dist/` at root. Slightly more work but lets you serve the explorer directly at `/`.
+3. **Rebuild the tarball with a different base** — clone the repo and run `VITE_BASE_PATH=/ npx vite build`, then serve `dist/` at root.
 
-A pre-built Docker image is a planned future enhancement; it isn't shipped today because the hard-coded base path would need a second build configuration.
+## Container image
+
+A pre-built OCI image is published to GitHub Container Registry on every release:
+
+```
+ghcr.io/o1-labs/mina-explorer:<version>
+ghcr.io/o1-labs/mina-explorer:latest
+```
+
+Initial releases ship `linux/amd64` only. `linux/arm64` is supported by the build pipeline and will be enabled by flipping the `PLATFORMS` env var in `.github/workflows/docker.yml` once v1 is validated in production.
+
+### Pull and run
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/o1-labs/mina-explorer:latest
+# or
+podman run --rm -p 8080:8080 ghcr.io/o1-labs/mina-explorer:latest
+```
+
+The image listens on port 8080 (rootless-friendly — runs as the unprivileged nginx user UID 101). It's based on `nginxinc/nginx-unprivileged:1.27-alpine`.
+
+### Runtime configuration
+
+The explorer's network endpoints are baked in at build time. To override them without rebuilding, set these env vars on the container:
+
+| Env var                          | Type        | Purpose |
+| -------------------------------- | ----------- | ------- |
+| `MINA_EXPLORER_DEFAULT_NETWORK`  | string      | Network id (e.g. `mainnet`). Must match a known id (compiled-in or one you add via `MINA_EXPLORER_NETWORKS`). Validated against `[a-zA-Z0-9_-]+`. |
+| `MINA_EXPLORER_NETWORKS`         | JSON object | Map of `id → Partial<NetworkConfig>`, merged over the compiled defaults. Validated as JSON before being embedded. |
+
+The container's entrypoint hook (`docker/entrypoint.sh`) regenerates `/usr/share/nginx/html/config.js` from these vars at startup. If neither is set, the bundled placeholder is left alone and the explorer uses its compiled defaults — image behaves identically to the GitHub Pages build.
+
+To override an existing network's endpoints (only the fields you want to change need to be set):
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e MINA_EXPLORER_DEFAULT_NETWORK=mainnet \
+  -e MINA_EXPLORER_NETWORKS='{"mainnet":{"archiveEndpoint":"https://my-archive.example.com","daemonEndpoint":"https://my-daemon.example.com/graphql"}}' \
+  ghcr.io/o1-labs/mina-explorer:latest
+```
+
+To add a brand-new network, include `archiveEndpoint` and `daemonEndpoint` at minimum:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e MINA_EXPLORER_DEFAULT_NETWORK=my-testnet \
+  -e MINA_EXPLORER_NETWORKS='{"my-testnet":{"displayName":"My Testnet","archiveEndpoint":"https://testnet-archive.example.com","daemonEndpoint":"https://testnet-daemon.example.com/graphql","isTestnet":true}}' \
+  ghcr.io/o1-labs/mina-explorer:latest
+```
+
+Invalid JSON or invalid identifiers cause the entrypoint to abort before nginx starts — fail-fast, with a clear error message in `docker logs`.
+
+### docker-compose / podman-compose
+
+The repo ships [`compose.yaml`](compose.yaml) as a single-service example. The image is overridable via the `MINA_EXPLORER_IMAGE` env var so you can run a locally-built image without editing the compose file:
+
+```bash
+# Default — pulls from GHCR
+docker compose up -d
+
+# Use a locally-built image
+./scripts/docker-build.sh
+MINA_EXPLORER_IMAGE=localhost/mina-explorer:dev docker compose up -d
+
+# Or have compose itself build the image — uncomment the `build:` block in
+# compose.yaml, then:
+docker compose up -d --build
+```
+
+The same `MINA_EXPLORER_DEFAULT_NETWORK` and `MINA_EXPLORER_NETWORKS` vars work in compose's `environment:` block — see the commented example at the bottom of `compose.yaml`.
+
+### Build the image yourself
+
+The image is built by [`scripts/docker-build.sh`](scripts/docker-build.sh), which CI invokes with the same env vars you can set yourself:
+
+```bash
+# Defaults: docker, host arch, tagged localhost/mina-explorer:dev
+./scripts/docker-build.sh
+
+# Build with podman
+RUNTIME=podman ./scripts/docker-build.sh
+
+# Multi-arch push to your own GHCR namespace
+RUNTIME=docker IMAGE=ghcr.io/myuser/mina-explorer TAGS=v0.2.1,latest \
+  PLATFORMS=linux/amd64,linux/arm64 PUSH=1 ./scripts/docker-build.sh
+
+# Customise the SPA base path (e.g. behind a /explorer/ reverse proxy)
+VITE_BASE_PATH=/explorer/ ./scripts/docker-build.sh
+```
+
+[`scripts/docker-test.sh`](scripts/docker-test.sh) runs HTTP smoke tests, runtime override, validation failure paths, and a compose round-trip against the built image. CI runs it before publishing; locally:
+
+```bash
+./scripts/docker-test.sh                  # build + test
+RUNTIME=podman ./scripts/docker-test.sh   # with podman
+SKIP_BUILD=1 ./scripts/docker-test.sh     # test an existing image
+```
 
 ## Slack notifications
 

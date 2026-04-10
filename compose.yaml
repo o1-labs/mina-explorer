@@ -1,0 +1,63 @@
+# compose.yaml — example for self-hosting Mina Explorer.
+#
+# Works with both Docker Compose and Podman Compose:
+#
+#   docker compose up -d           # Docker
+#   podman-compose up -d           # Podman
+#
+# By default this pulls the published image from GHCR. There are two ways to
+# run a locally-built image instead:
+#
+#   1. Pre-build with the helper script and override the image tag:
+#        ./scripts/docker-build.sh
+#        MINA_EXPLORER_IMAGE=localhost/mina-explorer:dev docker compose up -d
+#
+#   2. Have compose itself build the image — uncomment the `build:` block
+#      below and run:
+#        docker compose up -d --build
+#
+# To customise the networks shown in the explorer (e.g. point at your own
+# archive node), set MINA_EXPLORER_DEFAULT_NETWORK and MINA_EXPLORER_NETWORKS
+# in the `environment:` block below.
+
+services:
+  mina-explorer:
+    image: ${MINA_EXPLORER_IMAGE:-ghcr.io/o1-labs/mina-explorer:latest}
+    # Uncomment to have compose build the image itself. The build output is
+    # tagged with whatever `image:` above resolves to.
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: mina-explorer
+    ports:
+      - '8080:8080'
+    restart: unless-stopped
+    # ----- Runtime configuration (all optional) -----
+    #
+    # Uncomment any of the variables below to override the compiled-in
+    # network defaults without rebuilding the image. Both env vars are
+    # honoured by docker/entrypoint.sh, which regenerates /config.js inside
+    # the container at startup.
+    #
+    # environment:
+    #   # Pre-select the active network on first visit. Must match a known
+    #   # network id (compiled-in or one you add via MINA_EXPLORER_NETWORKS).
+    #   MINA_EXPLORER_DEFAULT_NETWORK: mainnet
+    #
+    #   # Override or add networks. Object key = network id; values are
+    #   # MERGED over the compiled-in defaults — you only need to set the
+    #   # fields you want to change. To add a brand-new network, include
+    #   # archiveEndpoint and daemonEndpoint at minimum.
+    #   MINA_EXPLORER_NETWORKS: |
+    #     {
+    #       "mainnet": {
+    #         "archiveEndpoint": "https://my-archive.example.com",
+    #         "daemonEndpoint": "https://my-daemon.example.com/graphql"
+    #       },
+    #       "my-testnet": {
+    #         "displayName": "My Testnet",
+    #         "archiveEndpoint": "https://testnet-archive.example.com",
+    #         "daemonEndpoint": "https://testnet-daemon.example.com/graphql",
+    #         "isTestnet": true
+    #       }
+    #     }

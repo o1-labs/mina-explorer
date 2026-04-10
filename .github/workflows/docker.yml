@@ -1,0 +1,119 @@
+name: Build and publish Docker image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (defaults to manual-<sha>). Ignored on release events."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test-push:
+    name: Build, test, and push to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # On release events, check out the tag that was released
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/mina-explorer"
+          if [ -n "${{ github.event.release.tag_name }}" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            TAGS="$VERSION"
+            if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+              TAGS="${TAGS},latest"
+            fi
+          elif [ -n "${{ inputs.tag }}" ]; then
+            VERSION="${{ inputs.tag }}"
+            TAGS="$VERSION"
+          else
+            VERSION="manual-${GITHUB_SHA::7}"
+            TAGS="$VERSION"
+          fi
+          printf 'image=%s\n' "$IMAGE" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'tags=%s\n' "$TAGS" >> "$GITHUB_OUTPUT"
+          printf 'image: %s\n' "$IMAGE"
+          printf 'version: %s\n' "$VERSION"
+          printf 'tags: %s\n' "$TAGS"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 1: Build the image and load it into the local docker store so
+      # the test script can run against it. Single-platform + PUSH=0 → buildx
+      # build --load. We tag it with the version only here; :latest is added
+      # in the push step below.
+      - name: Build image (load to local store)
+        env:
+          RUNTIME: docker
+          IMAGE: ${{ steps.meta.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.version }}
+          # Initial release: amd64 only for fast first cut.
+          # To enable arm64, change to: linux/amd64,linux/arm64
+          PLATFORMS: linux/amd64
+          PUSH: "0"
+          VITE_BASE_PATH: /
+        run: ./scripts/docker-build.sh
+
+      # Step 2: Run the smoke tests against the just-built image. Aborts the
+      # workflow before publishing if any assertion fails.
+      - name: Smoke-test image
+        env:
+          RUNTIME: docker
+          IMAGE: ${{ steps.meta.outputs.image }}
+          TAG: ${{ steps.meta.outputs.version }}
+          SKIP_BUILD: "1"
+          # podman-compose isn't installed on the GitHub runner;
+          # docker compose IS, so the compose round-trip will use it.
+          SKIP_COMPOSE: "0"
+        run: ./scripts/docker-test.sh
+
+      # Step 3: Publish all final tags. Cache from step 1 makes this fast.
+      - name: Build and push image
+        env:
+          RUNTIME: docker
+          IMAGE: ${{ steps.meta.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          PLATFORMS: linux/amd64
+          PUSH: "1"
+          VITE_BASE_PATH: /
+        run: ./scripts/docker-build.sh
+
+      - name: Step summary
+        run: |
+          {
+            printf '## Docker image published\n\n'
+            printf '**Image:** `%s`\n' '${{ steps.meta.outputs.image }}'
+            printf '**Version:** `%s`\n' '${{ steps.meta.outputs.version }}'
+            printf '**Tags:** `%s`\n' '${{ steps.meta.outputs.tags }}'
+            printf '**Platforms:** `linux/amd64`\n\n'
+            printf 'Pull with:\n\n'
+            printf '```bash\n'
+            printf 'docker pull %s:%s\n' '${{ steps.meta.outputs.image }}' '${{ steps.meta.outputs.version }}'
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"

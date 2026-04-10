@@ -17,7 +17,20 @@ export interface NetworkConfig {
   otherExplorers?: ExplorerLink[];
 }
 
-export const NETWORKS: Record<string, NetworkConfig> = {
+// Runtime config injected by /config.js (see public/config.js and
+// docker/entrypoint.sh). Self-hosted Docker users override the compiled
+// defaults below by setting MINA_EXPLORER_DEFAULT_NETWORK and
+// MINA_EXPLORER_NETWORKS env vars on the container.
+declare global {
+  interface Window {
+    __MINA_EXPLORER_CONFIG__?: {
+      defaultNetwork?: string;
+      networks?: Record<string, Partial<NetworkConfig>>;
+    };
+  }
+}
+
+const COMPILED_NETWORKS: Record<string, NetworkConfig> = {
   'pre-mesa': {
     id: 'pre-mesa',
     name: 'pre-mesa',
@@ -73,4 +86,42 @@ export const NETWORKS: Record<string, NetworkConfig> = {
   },
 };
 
-export const DEFAULT_NETWORK = 'mesa';
+const COMPILED_DEFAULT_NETWORK = 'mesa';
+
+const RUNTIME =
+  (typeof window !== 'undefined' && window.__MINA_EXPLORER_CONFIG__) || {};
+
+const merged: Record<string, NetworkConfig> = { ...COMPILED_NETWORKS };
+for (const [id, override] of Object.entries(RUNTIME.networks ?? {})) {
+  const base = merged[id];
+  if (base) {
+    // Partial override of an existing network — fields not set fall through
+    // to the compiled value. The id is forced to the map key so the user
+    // can't make the object disagree with itself.
+    merged[id] = { ...base, ...override, id };
+  } else if (override.archiveEndpoint && override.daemonEndpoint) {
+    // Adding a brand-new network — both endpoints are mandatory
+    merged[id] = {
+      id,
+      name: override.name ?? id,
+      displayName: override.displayName ?? id,
+      archiveEndpoint: override.archiveEndpoint,
+      daemonEndpoint: override.daemonEndpoint,
+      isTestnet: override.isTestnet ?? true,
+      ...(override.otherExplorers
+        ? { otherExplorers: override.otherExplorers }
+        : {}),
+    };
+  } else {
+    console.warn(
+      `[mina-explorer] runtime config: ignoring network "${id}" — needs archiveEndpoint and daemonEndpoint`,
+    );
+  }
+}
+
+export const NETWORKS: Record<string, NetworkConfig> = merged;
+
+export const DEFAULT_NETWORK: string =
+  RUNTIME.defaultNetwork && merged[RUNTIME.defaultNetwork]
+    ? RUNTIME.defaultNetwork
+    : COMPILED_DEFAULT_NETWORK;

@@ -5,6 +5,14 @@
     <link rel="icon" type="image/png" href="/favicon-32x32.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mina Explorer</title>
+    <!--
+      Runtime config — must be a CLASSIC script (not type="module") so it
+      executes synchronously in <head> before the deferred ES module below.
+      Populates window.__MINA_EXPLORER_CONFIG__ which src/config/networks.ts
+      reads at module-load time. The Docker image regenerates /config.js at
+      container startup; in dev / GitHub Pages it's the empty placeholder.
+    -->
+    <script src="/config.js"></script>
   </head>
   <body>
     <div id="root"></div>

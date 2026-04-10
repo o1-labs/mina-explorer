@@ -134,6 +134,80 @@ To trigger a release manually or override the auto-tag, use **Actions → Deploy
 
 See [`RELEASES.md`](RELEASES.md) for the full reference (commit prefix rules, self-hosting, manual override, Slack setup, CODEOWNERS gate).
 
+## Run with Docker / Podman
+
+A pre-built container image is published to GitHub Container Registry on every release: `ghcr.io/o1-labs/mina-explorer`. The image is `linux/amd64` and serves the explorer at `http://localhost:8080/`.
+
+### Quickstart
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/o1-labs/mina-explorer:latest
+# or
+podman run --rm -p 8080:8080 ghcr.io/o1-labs/mina-explorer:latest
+```
+
+Open <http://localhost:8080>.
+
+### Override the network endpoints at runtime
+
+The compiled-in defaults point at the four o1-labs networks (mainnet, devnet, mesa, pre-mesa). To self-host against your own archive node, set `MINA_EXPLORER_NETWORKS` (a JSON object merged over the defaults) and optionally `MINA_EXPLORER_DEFAULT_NETWORK`:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e MINA_EXPLORER_DEFAULT_NETWORK=mainnet \
+  -e MINA_EXPLORER_NETWORKS='{"mainnet":{"archiveEndpoint":"https://my-archive.example.com","daemonEndpoint":"https://my-daemon.example.com/graphql"}}' \
+  ghcr.io/o1-labs/mina-explorer:latest
+```
+
+You only need to set the fields you want to change — partial overrides are merged over the compiled-in network entry. To add a brand-new network, include `archiveEndpoint` and `daemonEndpoint` at minimum. See [`RELEASES.md`](RELEASES.md#runtime-configuration) for the full env var spec.
+
+### docker-compose / podman-compose
+
+The repo ships a [`compose.yaml`](compose.yaml) example. Bring it up with whichever compose runtime you have:
+
+```bash
+docker compose up -d           # Docker
+podman-compose up -d           # Podman
+```
+
+The example file shows the same `MINA_EXPLORER_*` env vars in a commented-out `environment:` block — uncomment what you need.
+
+### Build the image locally
+
+The build is driven by [`scripts/docker-build.sh`](scripts/docker-build.sh), which CI invokes with the same env vars you can set yourself. Builds for the host arch by default with the runtime of your choice:
+
+```bash
+# Default — docker, host arch, tagged localhost/mina-explorer:dev
+./scripts/docker-build.sh
+
+# Use podman
+RUNTIME=podman ./scripts/docker-build.sh
+
+# Build for a specific platform
+PLATFORMS=linux/arm64 ./scripts/docker-build.sh
+
+# Push a versioned multi-arch tag to your own GHCR namespace
+RUNTIME=docker IMAGE=ghcr.io/myuser/mina-explorer TAGS=v0.2.1,latest \
+  PLATFORMS=linux/amd64,linux/arm64 PUSH=1 ./scripts/docker-build.sh
+```
+
+To run the locally-built image with the compose example, override the image tag via env var:
+
+```bash
+./scripts/docker-build.sh
+MINA_EXPLORER_IMAGE=localhost/mina-explorer:dev docker compose up -d
+```
+
+### Test the image
+
+[`scripts/docker-test.sh`](scripts/docker-test.sh) runs HTTP smoke tests, the runtime-config override path, validation failure paths, and a compose round-trip. CI runs this before publishing; locally run it to validate any change to the image:
+
+```bash
+./scripts/docker-test.sh                  # build + test
+RUNTIME=podman ./scripts/docker-test.sh   # with podman
+SKIP_BUILD=1 ./scripts/docker-test.sh     # test an already-built image
+```
+
 ## Contributing
 
 1. Create a branch from `main`
