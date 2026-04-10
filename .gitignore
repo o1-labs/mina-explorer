@@ -37,4 +37,4 @@ playwright-report/
 playwright/.cache/
 
 # memsearch
-.memsearch/
+.memsearch
