@@ -35,3 +35,6 @@ Thumbs.db
 test-results/
 playwright-report/
 playwright/.cache/
+
+# memsearch
+.memsearch/

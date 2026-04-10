@@ -20,8 +20,8 @@ import {
 export function App(): ReactNode {
   return (
     <ThemeProvider>
-      <NetworkProvider>
-        <HashRouter>
+      <HashRouter>
+        <NetworkProvider>
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
@@ -41,8 +41,8 @@ export function App(): ReactNode {
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
-        </HashRouter>
-      </NetworkProvider>
+        </NetworkProvider>
+      </HashRouter>
     </ThemeProvider>
   );
 }

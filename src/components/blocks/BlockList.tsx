@@ -79,7 +79,11 @@ export function BlockList({
                 </div>
               </td>
               <td className="px-4 py-3">
-                <HashLink hash={block.stateHash} type="block" />
+                <HashLink
+                  hash={block.stateHash}
+                  type="block"
+                  linkTo={`/block/${block.blockHeight}`}
+                />
               </td>
               <td className="px-4 py-3">
                 <HashLink hash={block.creator} type="account" />

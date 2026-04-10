@@ -2,64 +2,37 @@
   "data": {
     "pooledUserCommands": [
       {
-        "id": "CkpZwt1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWp",
         "hash": "5JuA8jyKPXgVcNnQxD9JKMVLR4GzTxNHr6FqE3mYBdWy7ScPvC9K",
         "kind": "PAYMENT",
-        "nonce": 123,
-        "source": {
-          "publicKey": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg"
-        },
-        "receiver": {
-          "publicKey": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN"
-        },
         "amount": "1000000000",
         "fee": "10000000",
-        "memo": "Test payment"
+        "from": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+        "to": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+        "memo": "E4YmF9dJ7jBXyD2dKPGRfEtYsZ82fQ2UL3bpB3YVuTCxkcZ6YqVKd",
+        "nonce": 123
       },
       {
-        "id": "CkpZwt1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWq",
         "hash": "5JuA8jyKPXgVcNnQxD9JKMVLR4GzTxNHr6FqE3mYBdWy7ScPvC9L",
         "kind": "PAYMENT",
-        "nonce": 456,
-        "source": {
-          "publicKey": "B62qoG5Yk4iVxpyczUrBNpwtx2xunPhxfG7yYA3xYBPJeRbABxvWC3K"
-        },
-        "receiver": {
-          "publicKey": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg"
-        },
         "amount": "5000000000",
         "fee": "20000000",
-        "memo": "Delegation reward"
+        "from": "B62qoG5Yk4iVxpyczUrBNpwtx2xunPhxfG7yYA3xYBPJeRbABxvWC3K",
+        "to": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+        "memo": "E4YmF9dJ7jBXyD2dKPGRfEtYsZ82fQ2UL3bpB3YVuTCxkcZ6YqVKd",
+        "nonce": 456
       }
     ],
     "pooledZkappCommands": [
       {
-        "id": "CkpZzkApp1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJr",
         "hash": "5JuZkApp8jyKPXgVcNnQxD9JKMVLR4GzTxNHr6FqE3mYBdWy7ScPv",
         "zkappCommand": {
-          "memo": "zkApp transaction",
+          "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4YNTv97JEVmSiaqifp",
           "feePayer": {
             "body": {
               "publicKey": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
-              "fee": "100000000",
-              "nonce": "789"
+              "fee": "100000000"
             }
-          },
-          "accountUpdates": [
-            {
-              "body": {
-                "publicKey": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
-                "tokenId": "wSHV2S4qX9jFsLjQo8r1BsMLH2ZRKsZx6EJd1sbozGPieEC4Jf",
-                "update": {
-                  "appState": ["1", "2", "3", "4", "5", "6", "7", "8"]
-                },
-                "balanceChange": {
-                  "magnitude": "0",
-                  "sgn": "Positive"
-                }
-              }
-            }
-          ]
+          }
         }
       }
     ]

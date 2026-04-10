@@ -108,6 +108,18 @@ export function BlockDetail({
                     <CopyButton text={block.stateHash} />
                   </div>
                 </div>
+                {block.parentHash && (
+                  <div className="flex flex-col gap-1 border-b border-border pb-2">
+                    <span className="text-muted-foreground">Parent Hash</span>
+                    <div className="flex items-start gap-2">
+                      <HashLink
+                        hash={block.parentHash}
+                        type="block"
+                        truncate={false}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between border-b border-border pb-2">
                   <span className="text-muted-foreground">Timestamp</span>
                   <span>{formatDateTime(block.dateTime)}</span>

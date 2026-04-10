@@ -1,0 +1,15 @@
+# CODEOWNERS for mina-explorer
+#
+# Scope: only release-affecting paths are gated. The rest of the repo has
+# no required ownership so day-to-day PRs are not slowed down.
+#
+# Effective only when branch protection on `main` has
+# "Require review from Code Owners" enabled in repo settings.
+
+# Release plumbing
+/.github/workflows/deploy.yml @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/release.yml          @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/CODEOWNERS           @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+
+# Release documentation
+/RELEASES.md                  @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee

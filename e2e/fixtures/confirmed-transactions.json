@@ -1,0 +1,83 @@
+{
+  "data": {
+    "blocks": [
+      {
+        "blockHeight": 432150,
+        "dateTime": "2026-02-04T12:30:00.000Z",
+        "transactions": {
+          "userCommands": [
+            {
+              "hash": "CkpZwt1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWp",
+              "kind": "payment",
+              "from": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+              "to": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+              "amount": "1000000000",
+              "fee": "10000000",
+              "memo": "E4YmF9dJ7jBXyD2dKPGRfEtYsZ82fQ2UL3bpB3YVuTCxkcZ6YqVKd",
+              "nonce": 123,
+              "status": "applied",
+              "failureReason": null
+            },
+            {
+              "hash": "CkpZwt1Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWq",
+              "kind": "stake_delegation",
+              "from": "B62qoG5Yk4iVxpyczUrBNpwtx2xunPhxfG7yYA3xYBPJeRbABxvWC3K",
+              "to": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+              "amount": "0",
+              "fee": "5000000",
+              "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4YNTv97JEVmSiaqifp",
+              "nonce": 456,
+              "status": "applied",
+              "failureReason": null
+            }
+          ],
+          "zkappCommands": [
+            {
+              "hash": "5JuZkApp8jyKPXgVcNnQxD9JKMVLR4GzTxNHr6FqE3mYBdWy7ScPv",
+              "feePayer": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+              "fee": "100000000",
+              "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4YNTv97JEVmSiaqifp",
+              "status": "applied",
+              "failureReason": null
+            }
+          ]
+        }
+      },
+      {
+        "blockHeight": 432149,
+        "dateTime": "2026-02-04T12:27:00.000Z",
+        "transactions": {
+          "userCommands": [
+            {
+              "hash": "CkpZwt2Hy1Dv2HnKfBMwQJRj4hXBRfNVqy8xPZw2TnEq5wDKdJrWr",
+              "kind": "payment",
+              "from": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+              "to": "B62qoG5Yk4iVxpyczUrBNpwtx2xunPhxfG7yYA3xYBPJeRbABxvWC3K",
+              "amount": "2500000000",
+              "fee": "15000000",
+              "memo": "E4YmF9dJ7jBXyD2dKPGRfEtYsZ82fQ2UL3bpB3YVuTCxkcZ6YqVKd",
+              "nonce": 789,
+              "status": "applied",
+              "failureReason": null
+            }
+          ],
+          "zkappCommands": []
+        }
+      },
+      {
+        "blockHeight": 432148,
+        "dateTime": "2026-02-04T12:24:00.000Z",
+        "transactions": {
+          "userCommands": [],
+          "zkappCommands": []
+        }
+      }
+    ],
+    "networkState": {
+      "maxBlockHeight": {
+        "canonicalMaxBlockHeight": 432148,
+        "pendingMaxBlockHeight": 432150
+      }
+    }
+  }
+}

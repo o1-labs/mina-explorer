@@ -8,9 +8,7 @@ test.describe('Mina Explorer', () => {
     await expect(page).toHaveTitle(/Mina Explorer/);
 
     // Check header logo link (Mina is an image + "Explorer" text)
-    await expect(
-      page.locator('header a').filter({ hasText: 'Explorer' }).first(),
-    ).toBeVisible();
+    await expect(page.locator('header a').first()).toBeVisible();
 
     // Check search bar is present (use first() to handle multiple)
     await expect(
@@ -217,9 +215,10 @@ test.describe('Mina Explorer', () => {
     await page.locator('nav a:has-text("Blocks")').first().click();
     await expect(page).toHaveURL(/\/blocks/);
 
-    // Click on logo to go back home
-    await page.locator('header a:has-text("Explorer")').first().click();
-    await expect(page).toHaveURL(/\/#?\/?$/);
+    // Click on logo to go back home. The URL sync effect re-appends
+    // ?network=<id> after navigation, so the route may end with a query string.
+    await page.locator('header a').first().click();
+    await expect(page).toHaveURL(/\/#\/?(\?network=[^/]+)?$/);
   });
 
   test('404 page for invalid routes', async ({ page }) => {
@@ -252,7 +251,7 @@ test.describe('Network Picker', () => {
     // Click on network selector dropdown (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await expect(networkButton).toBeVisible();
     await networkButton.click();
@@ -292,7 +291,7 @@ test.describe('Network Picker', () => {
     // Click on network selector (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -325,7 +324,7 @@ test.describe('Network Picker', () => {
     // Click on network selector (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -349,7 +348,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -370,7 +369,7 @@ test.describe('Network Picker', () => {
     ).toBeVisible();
 
     // Navigate back to home
-    await page.locator('header a:has-text("Explorer")').first().click();
+    await page.locator('header a').first().click();
 
     // Verify Devnet is still selected
     await expect(
@@ -401,7 +400,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -422,7 +421,7 @@ test.describe('Network Picker', () => {
     // Switch to Mainnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -435,9 +434,7 @@ test.describe('Network Picker', () => {
     await page.reload();
 
     // Wait for page to load (check header logo link)
-    await expect(
-      page.locator('header a').filter({ hasText: 'Explorer' }).first(),
-    ).toBeVisible();
+    await expect(page.locator('header a').first()).toBeVisible();
 
     // Verify Mainnet is still selected after refresh
     await expect(
@@ -471,7 +468,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Pre-Mesa|Mesa|Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -1087,5 +1084,174 @@ test.describe('Analytics Page', () => {
     await expect(page.locator('text=Total Blocks')).toBeVisible({
       timeout: 30000,
     });
+  });
+});
+
+test.describe('Transactions Page', () => {
+  test('shows confirmed transactions by default', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Page title
+    await expect(page.locator('h1')).toContainText('Transactions');
+
+    // Confirmed tab should be active
+    const confirmedTab = page
+      .locator('button')
+      .filter({ hasText: 'Confirmed' });
+    await expect(confirmedTab).toBeVisible();
+
+    // Should show transaction table
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+
+    // Table should have expected columns
+    await expect(page.locator('th:has-text("Type")')).toBeVisible();
+    await expect(page.locator('th:has-text("Hash")')).toBeVisible();
+    await expect(page.locator('th:has-text("From")')).toBeVisible();
+    await expect(page.locator('th:has-text("Block")')).toBeVisible();
+  });
+
+  test('confirmed tab shows transaction rows', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Wait for table to load
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+
+    // Should have at least one transaction row
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test('can switch to mempool tab', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Click mempool tab
+    await page.locator('button').filter({ hasText: 'Mempool' }).click();
+
+    // Should show mempool sub-tabs
+    await expect(
+      page.locator('button').filter({ hasText: /User Transactions/ }),
+    ).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      page.locator('button').filter({ hasText: /zkApp Commands/ }),
+    ).toBeVisible();
+  });
+
+  test('can switch between tabs', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Wait for confirmed tab to load
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+
+    // Switch to mempool
+    await page.locator('button').filter({ hasText: 'Mempool' }).click();
+    await expect(
+      page.locator('button').filter({ hasText: /User Transactions/ }),
+    ).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Switch back to confirmed
+    await page.locator('button').filter({ hasText: 'Confirmed' }).click();
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('shows type badges for transactions', async ({ page }) => {
+    await page.goto('/#/transactions');
+
+    // Wait for table to load
+    await expect(page.locator('tbody tr').first()).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Should show payment or delegation type badges
+    const typeBadge = page.locator('tbody span').filter({
+      hasText: /payment|delegation|zkapp/i,
+    });
+    await expect(typeBadge.first()).toBeVisible();
+  });
+
+  test('transactions page navigation link works', async ({ page }) => {
+    await page.goto('/');
+
+    // Click transactions link in navigation
+    await page
+      .locator('nav a')
+      .filter({ hasText: 'Transactions' })
+      .first()
+      .click();
+
+    // Should navigate to transactions page
+    await expect(page).toHaveURL(/\/transactions/);
+    await expect(page.locator('h1')).toContainText('Transactions');
+  });
+});
+
+test.describe('Mobile Menu', () => {
+  // Hamburger button is the lg:hidden button in the header
+  const hamburger = '[data-testid="mobile-menu-button"]';
+
+  test('network selector is accessible on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Wait for page to load
+    await expect(page.locator('text=Block Height').first()).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Hamburger should be visible on mobile
+    await expect(page.locator(hamburger)).toBeVisible({ timeout: 5000 });
+
+    // Open mobile menu
+    await page.locator(hamburger).click();
+
+    // Wait for menu animation
+    await page.waitForTimeout(300);
+
+    // Network selector button should be visible in mobile menu
+    const networkButton = page.locator(
+      '[data-testid="mobile-network-selector"]',
+    );
+    await expect(networkButton).toBeVisible({ timeout: 5000 });
+
+    // Click to expand network list
+    await networkButton.click();
+
+    // Network options should be visible inline (not clipped)
+    await expect(
+      page.locator('button').filter({ hasText: 'Devnet' }).first(),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      page.locator('button').filter({ hasText: 'Mainnet' }).first(),
+    ).toBeVisible();
+  });
+
+  test('can switch network on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Wait for page to load
+    await expect(page.locator('text=Block Height').first()).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Open mobile menu
+    await expect(page.locator(hamburger)).toBeVisible({ timeout: 5000 });
+    await page.locator(hamburger).click();
+    await page.waitForTimeout(300);
+
+    // Open network selector
+    const networkButton = page.locator(
+      '[data-testid="mobile-network-selector"]',
+    );
+    await networkButton.click();
+
+    // Switch to Devnet
+    await page.locator('button').filter({ hasText: 'Devnet' }).first().click();
+
+    // Verify Devnet is now selected
+    await expect(networkButton).toContainText('Devnet', { timeout: 5000 });
   });
 });

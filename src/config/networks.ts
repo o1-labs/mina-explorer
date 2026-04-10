@@ -18,24 +18,28 @@ export interface NetworkConfig {
 }
 
 export const NETWORKS: Record<string, NetworkConfig> = {
+  'pre-mesa': {
+    id: 'pre-mesa',
+    name: 'pre-mesa',
+    displayName: 'Pre-Mesa',
+    archiveEndpoint: 'https://pre-mesa-archive-node-api.gcp.o1test.net',
+    daemonEndpoint:
+      'https://plain-1-graphql.hetzner-pre-mesa-1.gcp.o1test.net/graphql',
+    isTestnet: true,
+  },
   mesa: {
     id: 'mesa',
     name: 'mesa',
     displayName: 'Mesa',
     archiveEndpoint: 'https://mesa-archive-node-api.gcp.o1test.net',
-    // Mesa uses devnet daemon for now (no dedicated mesa daemon endpoint)
-    daemonEndpoint: 'https://devnet-plain-1.gcp.o1test.net/graphql',
+    daemonEndpoint:
+      'https://plain-1-graphql.mina-mesa-network.gcp.o1test.net/graphql',
     isTestnet: true,
     otherExplorers: [
       {
         name: 'Mesa Explorer (Basic)',
         url: 'https://mesa-explorer.vercel.app/',
         description: 'Last 290 blocks only',
-      },
-      {
-        name: 'MinaExplorer Mesa',
-        url: 'https://mesa.minaexplorer.com/',
-        description: "Gareth's explorer",
       },
     ],
   },
@@ -46,6 +50,12 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     archiveEndpoint: 'https://devnet-archive-node-api.gcp.o1test.net',
     daemonEndpoint: 'https://devnet-plain-1.gcp.o1test.net/graphql',
     isTestnet: true,
+    otherExplorers: [
+      {
+        name: 'Minascan',
+        url: 'https://minascan.io/devnet/home',
+      },
+    ],
   },
   mainnet: {
     id: 'mainnet',
@@ -54,6 +64,12 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     archiveEndpoint: 'https://archive-node-api.gcp.o1test.net',
     daemonEndpoint: 'https://mainnet-plain-1.gcp.o1test.net/graphql',
     isTestnet: false,
+    otherExplorers: [
+      {
+        name: 'Minascan',
+        url: 'https://minascan.io/mainnet/home',
+      },
+    ],
   },
 };
 
