@@ -359,9 +359,8 @@ jobs:
           fi
 
           RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
-          TEXT="${SLACK_MENTION} :package: *mina-explorer ${TAG}* released
-${SUMMARY}
-${RELEASE_URL}"
+          TEXT=$(printf '%s :package: *mina-explorer %s* released\n%s\n%s' \
+            "$SLACK_MENTION" "$TAG" "$SUMMARY" "$RELEASE_URL")
 
           PAYLOAD=$(jq -nc \
             --arg channel "$SLACK_CHANNEL" \
