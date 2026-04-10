@@ -7,10 +7,11 @@
 # "Require review from Code Owners" enabled in repo settings.
 
 # Release plumbing
-/.github/workflows/deploy.yml @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
-/.github/workflows/docker.yml @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
-/.github/release.yml          @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
-/.github/CODEOWNERS           @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/workflows/deploy.yml            @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/workflows/docker.yml            @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/workflows/docker-pr-cleanup.yml @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/release.yml                     @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
+/.github/CODEOWNERS                      @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee
 
 # Release documentation
 /RELEASES.md                  @o1-labs/eng @sanabriarusso @amc-ie @dkijania @georgeeee

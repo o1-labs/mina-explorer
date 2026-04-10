@@ -1,0 +1,54 @@
+name: Delete PR Docker image
+
+# When a PR closes (merged or not), delete its `pr-<number>` tag from
+# ghcr.io/o1-labs/mina-explorer so the registry doesn't accumulate stale
+# tags. Idempotent — exits cleanly if no such tag exists (e.g., the PR
+# never touched docker-relevant files and never had an image built).
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cleanup:
+    name: Delete pr-<number> tag from GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Fork PRs never had an image pushed (the build job in docker.yml skips
+    # them), so there's nothing to clean up.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Delete pr-${{ github.event.pull_request.number }} tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PACKAGE=mina-explorer
+          TAG="pr-${PR_NUMBER}"
+          echo "Looking up versions tagged ${TAG} in ${OWNER}/${PACKAGE}"
+
+          # List versions and find any that carry the pr-<number> tag.
+          # GHCR /versions returns one entry per immutable image manifest;
+          # an entry's metadata.container.tags array contains the human-
+          # readable tags currently pointing at it.
+          VERSION_IDS=$(gh api \
+            "/orgs/${OWNER}/packages/container/${PACKAGE}/versions" \
+            --paginate \
+            --jq ".[] | select(.metadata.container.tags // [] | index(\"${TAG}\")) | .id" \
+            || true)
+
+          if [ -z "$VERSION_IDS" ]; then
+            echo "No versions tagged ${TAG} found, nothing to delete"
+            exit 0
+          fi
+
+          for ID in $VERSION_IDS; do
+            echo "Deleting version ${ID} (was tagged ${TAG})"
+            gh api -X DELETE "/orgs/${OWNER}/packages/container/${PACKAGE}/versions/${ID}"
+          done

@@ -9,6 +9,22 @@ on:
         description: "Image tag (defaults to manual-<sha>). Ignored on release events."
         required: false
         type: string
+  pull_request:
+    branches: [main]
+    # Only build when files that affect the image actually change
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - 'scripts/docker-*.sh'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker.yml'
 
 permissions:
   contents: read
@@ -19,13 +35,19 @@ jobs:
     name: Build, test, and push to GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Skip fork PRs — GITHUB_TOKEN can't push to GHCR from a fork's context.
+    # Same-repo PRs and all non-PR events run normally.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # On release events, check out the tag that was released
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          # On release events: the released tag.
+          # On pull_request events: the PR head commit (so we test the
+          #   actual code being merged, not the merge-result commit).
+          # Otherwise: whatever ref the workflow was invoked on.
+          ref: ${{ github.event.release.tag_name || github.event.pull_request.head.sha || github.ref }}
 
       - name: Compute image tags
         id: meta
@@ -37,6 +59,12 @@ jobs:
             if [ "${{ github.event.release.prerelease }}" != "true" ]; then
               TAGS="${TAGS},latest"
             fi
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR builds use a single mutable tag that always points at the
+            # latest push on the PR branch. The cleanup workflow deletes it
+            # when the PR closes.
+            VERSION="pr-${{ github.event.pull_request.number }}"
+            TAGS="$VERSION"
           elif [ -n "${{ inputs.tag }}" ]; then
             VERSION="${{ inputs.tag }}"
             TAGS="$VERSION"
