@@ -1,13 +1,8 @@
 import type { Account } from '@/types';
-import { NETWORKS, DEFAULT_NETWORK } from '@/config';
-
-const NETWORK_KEY = 'mina-explorer-network';
+import { NETWORKS, resolveActiveNetworkId } from '@/config';
 
 function getDaemonEndpoint(): string {
-  const savedNetwork = localStorage.getItem(NETWORK_KEY);
-  const networkId =
-    savedNetwork && NETWORKS[savedNetwork] ? savedNetwork : DEFAULT_NETWORK;
-  return NETWORKS[networkId].daemonEndpoint;
+  return NETWORKS[resolveActiveNetworkId()].daemonEndpoint;
 }
 
 // Daemon GraphQL query for account data

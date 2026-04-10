@@ -9,3 +9,7 @@ export const config = {
 
 export { NETWORKS, DEFAULT_NETWORK } from './networks';
 export type { NetworkConfig, ExplorerLink } from './networks';
+export {
+  getActiveNetworkIdFromHash,
+  resolveActiveNetworkId,
+} from './activeNetwork';

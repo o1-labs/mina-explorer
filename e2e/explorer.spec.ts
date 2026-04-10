@@ -215,9 +215,10 @@ test.describe('Mina Explorer', () => {
     await page.locator('nav a:has-text("Blocks")').first().click();
     await expect(page).toHaveURL(/\/blocks/);
 
-    // Click on logo to go back home
+    // Click on logo to go back home. The URL sync effect re-appends
+    // ?network=<id> after navigation, so the route may end with a query string.
     await page.locator('header a').first().click();
-    await expect(page).toHaveURL(/\/#?\/?$/);
+    await expect(page).toHaveURL(/\/#\/?(\?network=[^/]+)?$/);
   });
 
   test('404 page for invalid routes', async ({ page }) => {
