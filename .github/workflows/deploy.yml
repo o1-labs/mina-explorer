@@ -4,6 +4,21 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Custom tag (e.g., v1.0.0). Leave empty to use semver auto-bump from commit prefixes.'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark the release as a prerelease'
+        required: false
+        type: boolean
+        default: false
+      skip_release:
+        description: 'Deploy only — do not create a release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,10 +54,17 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: ./dist
+
+      - name: Upload dist for release
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
 
   deploy:
     environment:
@@ -54,3 +76,301 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  release:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      models: read
+    if: |
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip release]')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.skip_release != true)
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute tag (semver auto-bump)
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # 1) Manual override wins.
+          if [[ -n "${INPUT_TAG:-}" ]]; then
+            TAG="$INPUT_TAG"
+            PREV=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)
+            echo "tag=$TAG"   >> "$GITHUB_OUTPUT"
+            echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+            echo "bump=manual" >> "$GITHUB_OUTPUT"
+            echo "skip=false"  >> "$GITHUB_OUTPUT"
+            echo "Manual tag override: $TAG (previous: $PREV)"
+            exit 0
+          fi
+
+          # 2) Find latest semver tag (default v0.0.0 if none).
+          LAST=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)
+          if [[ -z "$LAST" ]]; then LAST="v0.0.0"; fi
+          MAJOR=$(echo "$LAST" | sed -E 's/^v([0-9]+)\.([0-9]+)\.([0-9]+).*$/\1/')
+          MINOR=$(echo "$LAST" | sed -E 's/^v([0-9]+)\.([0-9]+)\.([0-9]+).*$/\2/')
+          PATCH=$(echo "$LAST" | sed -E 's/^v([0-9]+)\.([0-9]+)\.([0-9]+).*$/\3/')
+
+          # 3) Walk commits since last semver tag.
+          if [[ "$LAST" == "v0.0.0" ]]; then
+            COMMITS=$(git log --pretty=format:'%s%n%b')
+          else
+            COMMITS=$(git log "${LAST}..HEAD" --pretty=format:'%s%n%b')
+          fi
+
+          if [[ -z "$COMMITS" ]]; then
+            echo "No new commits since $LAST — skipping release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 4) Determine bump (highest precedence wins).
+          BUMP=patch
+          if echo "$COMMITS" | grep -qiE '(^|\s)(feat|fix|refactor|perf|build|chore|docs|style|test|ci)(\([^)]+\))?!:|BREAKING CHANGE'; then
+            BUMP=major
+          elif echo "$COMMITS" | grep -qiE '(^|\s)feat(\([^)]+\))?:'; then
+            BUMP=minor
+          elif echo "$COMMITS" | grep -qiE '(^|\s)fix(\([^)]+\))?:'; then
+            BUMP=patch
+          fi
+
+          case "$BUMP" in
+            major) NEW="v$((MAJOR+1)).0.0" ;;
+            minor) NEW="v${MAJOR}.$((MINOR+1)).0" ;;
+            patch) NEW="v${MAJOR}.${MINOR}.$((PATCH+1))" ;;
+          esac
+
+          echo "Last: $LAST  Bump: $BUMP  New: $NEW"
+          echo "tag=$NEW"   >> "$GITHUB_OUTPUT"
+          echo "prev=$LAST" >> "$GITHUB_OUTPUT"
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if tag already exists
+        id: exists
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — nothing to release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Generate raw release notes
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          PREV: ${{ steps.tag.outputs.prev }}
+        run: |
+          set -euo pipefail
+          ARGS=(-X POST "/repos/${{ github.repository }}/releases/generate-notes"
+                -f "tag_name=${TAG}")
+          if [[ -n "${PREV:-}" ]]; then
+            ARGS+=(-f "previous_tag_name=${PREV}")
+          fi
+          gh api "${ARGS[@]}" --jq .body > raw-notes.md
+          echo "--- raw notes ---"
+          cat raw-notes.md
+
+      - name: Group notes by prefix (feat/fix/other)
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          BULLETS=$(grep -E '^\* ' raw-notes.md || true)
+          FEATURES=$(echo "$BULLETS" | grep -iE '^\* (feat|feature)[:(]' || true)
+          FIXES=$(echo   "$BULLETS" | grep -iE '^\* (fix|bugfix)[:(]'    || true)
+          OTHER=$(echo   "$BULLETS" | grep -ivE '^\* (feat|feature|fix|bugfix)[:(]' || true)
+          FULL_LINK=$(grep -E '^\*\*Full Changelog' raw-notes.md || true)
+
+          {
+            echo "## What's Changed"
+            echo
+            if [[ -n "$FEATURES" ]]; then echo "### Features";  echo "$FEATURES"; echo; fi
+            if [[ -n "$FIXES"    ]]; then echo "### Bug Fixes"; echo "$FIXES";    echo; fi
+            if [[ -n "$OTHER"    ]]; then echo "### Other";     echo "$OTHER";    echo; fi
+            [[ -n "$FULL_LINK" ]] && echo "$FULL_LINK"
+          } > release-notes.md
+          echo "--- grouped notes ---"
+          cat release-notes.md
+
+      - name: Pass notes to AI step via env
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        run: |
+          {
+            echo 'NOTES_FOR_AI<<RELEASE_NOTES_EOF'
+            cat release-notes.md
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_ENV"
+
+      - name: AI narrative summary (free via GitHub Models)
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        continue-on-error: true
+        uses: actions/ai-inference@v2
+        id: ai
+        with:
+          model: openai/gpt-4o-mini
+          system-prompt: |
+            You write concise release announcements for the mina-explorer
+            blockchain explorer. Plain prose, 2-3 sentences, no headings,
+            no bullets, no markdown decoration. Audience is end users, not
+            developers. Lead with the most user-visible change.
+          prompt: |
+            Summarize what's new in this release based on these notes:
+
+            ${{ env.NOTES_FOR_AI }}
+
+      - name: Prepend AI summary to release notes
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true' && steps.ai.outputs.response != ''
+        env:
+          AI_SUMMARY: ${{ steps.ai.outputs.response }}
+        run: |
+          {
+            printf '%s\n\n' "$AI_SUMMARY"
+            cat release-notes.md
+          } > tmp && mv tmp release-notes.md
+          echo "--- final release notes ---"
+          cat release-notes.md
+
+      - name: Download dist artifact
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist
+
+      - name: Package dist as tarball
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        id: pkg
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          TARBALL="mina-explorer-${TAG}.tar.gz"
+          tar -czf "$TARBALL" -C dist .
+          ls -lh "$TARBALL"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          TARBALL: ${{ steps.pkg.outputs.tarball }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "${PRERELEASE:-false}" == "true" ]]; then PRERELEASE_FLAG="--prerelease"; fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            $PRERELEASE_FLAG \
+            "$TARBALL"
+
+      # ----- Slack announcement -----
+      # Path A: GCP Secret Manager fetch (preferred). Skipped if GCP_SLACK_TOKEN_SA_KEY is not set.
+      # Path B: direct GitHub repo secret (fallback). Used if SLACK_BOT_TOKEN is set and Path A didn't run.
+      # If neither secret is set, all Slack steps short-circuit and the release ships without notifying.
+
+      - name: Authenticate to GCP (Path A)
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true' && env.GCP_SA_KEY != ''
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SLACK_TOKEN_SA_KEY }}
+        id: gcp_auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SLACK_TOKEN_SA_KEY }}
+
+      - name: Fetch Slack bot token from GCP Secret Manager (Path A)
+        if: steps.gcp_auth.outcome == 'success'
+        id: gcp_secret
+        continue-on-error: true
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            slack_bot_token:o1labs-192920/slackGrafanaAlertsBotToken
+
+      - name: Resolve Slack token (Path A or Path B)
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        id: slack_token
+        env:
+          PATH_A_TOKEN: ${{ steps.gcp_secret.outputs.slack_bot_token }}
+          PATH_B_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          if [[ -n "${PATH_A_TOKEN:-}" ]]; then
+            echo "Using Path A (GCP Secret Manager)"
+            TOKEN="$PATH_A_TOKEN"
+          elif [[ -n "${PATH_B_TOKEN:-}" ]]; then
+            echo "Using Path B (GitHub repo secret SLACK_BOT_TOKEN)"
+            TOKEN="$PATH_B_TOKEN"
+          else
+            echo "Neither GCP_SLACK_TOKEN_SA_KEY nor SLACK_BOT_TOKEN is set — skipping Slack notify"
+            echo "have_token=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "have_token=true" >> "$GITHUB_OUTPUT"
+          # Pass the token to subsequent steps via masked env, not as a step output.
+          {
+            echo 'SLACK_BOT_TOKEN<<SLACK_TOKEN_EOF'
+            echo "$TOKEN"
+            echo 'SLACK_TOKEN_EOF'
+          } >> "$GITHUB_ENV"
+
+      - name: Post release announcement to Slack
+        if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true' && steps.slack_token.outputs.have_token == 'true'
+        continue-on-error: true
+        env:
+          # SLACK_BOT_TOKEN is exported by the previous step via $GITHUB_ENV.
+          # Subteam mention matches Grafana's slack-platform-eng contact point
+          # (see gitops-infrastructure/.../grafana/templates/extra-deploys.yaml.gotmpl L60-L62)
+          # Channel ID C07SSEMHLLD — name kept for readability
+          SLACK_CHANNEL: '#releases'
+          SLACK_MENTION: '<!subteam^S04EBNWL4HG>'
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+          AI_SUMMARY: ${{ steps.ai.outputs.response }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${AI_SUMMARY// }" ]]; then
+            SUMMARY="A new release of mina-explorer is out — see the link for details."
+          else
+            SUMMARY="$AI_SUMMARY"
+          fi
+
+          RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
+          TEXT=$(printf '%s :package: *mina-explorer %s* released\n%s\n%s' \
+            "$SLACK_MENTION" "$TAG" "$SUMMARY" "$RELEASE_URL")
+
+          PAYLOAD=$(jq -nc \
+            --arg channel "$SLACK_CHANNEL" \
+            --arg text    "$TEXT" \
+            '{channel: $channel, text: $text, unfurl_links: true}')
+
+          RESP=$(curl -sS -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$PAYLOAD")
+          echo "$RESP" | jq .
+          echo "$RESP" | jq -e '.ok == true'

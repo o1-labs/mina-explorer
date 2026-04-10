@@ -196,8 +196,20 @@ async function handleArchiveRequest(route: Route): Promise<void> {
       return;
     }
 
+    // Handle paginated transaction queries (archive with transaction fields)
+    if (
+      query.includes('GetTransactions') ||
+      query.includes('GetTransactionsPaginated')
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FIXTURE_DATA.confirmedTransactions),
+      });
+      return;
+    }
+
     // Handle block detail queries (with userCommands or zkappCommands)
-    // Note: feeTransfer alone is not sufficient as block list queries also include it
     if (
       query.includes('blocks') &&
       (query.includes('userCommands') || query.includes('zkappCommands'))
@@ -257,26 +269,97 @@ async function handleDaemonRequest(route: Route): Promise<void> {
     const body = JSON.parse(postData);
     const query = body.query || '';
 
-    // Handle account queries
-    if (query.includes('account')) {
-      const variables = body.variables || {};
-      const publicKey = variables.publicKey;
-
-      // Return null for invalid accounts
-      if (publicKey === FIXTURES.accounts.invalidAccount) {
+    // Handle bestChain queries (daemon epoch info + transaction listing)
+    // Must be checked before 'account' since bestChain queries contain 'accountUpdates'
+    if (query.includes('bestChain')) {
+      // Epoch info query (small bestChain with protocolState)
+      if (query.includes('epoch') || query.includes('slot')) {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
             data: {
-              account: null,
+              bestChain: [
+                {
+                  protocolState: {
+                    consensusState: {
+                      blockHeight: '432150',
+                      epoch: '61',
+                      slot: '3570',
+                      slotSinceGenesis: '436710',
+                    },
+                  },
+                },
+              ],
             },
           }),
         });
         return;
       }
 
-      // Return fixture account data
+      // Transaction listing query — return confirmed transactions fixture
+      // Remap archive format to daemon bestChain format
+      const blocks = FIXTURE_DATA.confirmedTransactions.data.blocks;
+      const bestChain = blocks.map(
+        (b: {
+          blockHeight: number;
+          dateTime: string;
+          transactions: object;
+        }) => ({
+          stateHash: `3NK${b.blockHeight}`,
+          protocolState: {
+            consensusState: { blockHeight: String(b.blockHeight) },
+            blockchainState: {
+              date: String(new Date(b.dateTime).getTime()),
+            },
+          },
+          transactions: b.transactions,
+        }),
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { bestChain } }),
+      });
+      return;
+    }
+
+    // Handle daemon block(height) queries
+    if (query.includes('block(height')) {
+      const chain = FIXTURE_DATA.confirmedTransactions.data.bestChain;
+      const block = chain[chain.length - 1]; // newest block
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            block: {
+              transactions: {
+                coinbase: '720000000000',
+                ...block.transactions,
+                feeTransfer: [],
+              },
+            },
+          },
+        }),
+      });
+      return;
+    }
+
+    // Handle account queries
+    if (query.includes('account')) {
+      const variables = body.variables || {};
+      const publicKey = variables.publicKey;
+
+      if (publicKey === FIXTURES.accounts.invalidAccount) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { account: null } }),
+        });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

@@ -1,6 +1,7 @@
 export { Layout } from './Layout';
 export { Header } from './Header';
 export { Footer } from './Footer';
+export { Disclaimer } from './Disclaimer';
 export { SearchBar } from './SearchBar';
 export { NetworkSelector } from './NetworkSelector';
 export { ThemeToggle } from './ThemeToggle';

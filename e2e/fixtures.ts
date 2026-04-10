@@ -8,6 +8,7 @@ import blocksFixture from './fixtures/blocks.json' with { type: 'json' };
 import blockDetailFixture from './fixtures/block-detail.json' with { type: 'json' };
 import accountFixture from './fixtures/account.json' with { type: 'json' };
 import transactionsFixture from './fixtures/transactions.json' with { type: 'json' };
+import confirmedTransactionsFixture from './fixtures/confirmed-transactions.json' with { type: 'json' };
 import { setupApiMocks, shouldMockApi } from './mock-api';
 
 /**
@@ -71,4 +72,5 @@ export const FIXTURE_DATA = {
   blockDetail: blockDetailFixture,
   account: accountFixture,
   transactions: transactionsFixture,
+  confirmedTransactions: confirmedTransactionsFixture,
 };

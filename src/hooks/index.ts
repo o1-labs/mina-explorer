@@ -3,6 +3,7 @@ export {
   usePaginatedBlocks,
   useBlock,
   useNetworkState,
+  useEpochInfo,
 } from './useBlocks';
 export { useSearch } from './useSearch';
 export { useNetwork } from './useNetwork';
@@ -18,6 +19,8 @@ export {
   usePendingZkAppCommands,
   useTransaction,
   useAccountTransactions,
+  useRecentTransactions,
+  usePaginatedTransactions,
 } from './useTransactions';
 export { usePrice } from './usePrice';
 export { useHistoricalPrice } from './useHistoricalPrice';

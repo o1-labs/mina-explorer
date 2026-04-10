@@ -1,0 +1,11 @@
+changelog:
+  exclude:
+    authors:
+      - dependabot
+      - dependabot[bot]
+    labels:
+      - ignore-for-release
+  categories:
+    - title: Changes
+      labels:
+        - "*"

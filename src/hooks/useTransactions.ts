@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   fetchPendingTransactions,
   fetchPendingZkAppCommands,
   fetchTransactionByHash,
   fetchAccountTransactions,
+  fetchRecentTransactions,
+  fetchTransactionsPaginated,
   type PendingTransaction,
   type PendingZkAppCommand,
   type TransactionDetail,
   type AccountTransaction,
+  type ConfirmedTransaction,
 } from '@/services/api/transactions';
 import { useNetwork } from './useNetwork';
 
@@ -172,4 +175,220 @@ export function useAccountTransactions(
   }, [publicKey, network.id]);
 
   return { transactions, loading, error };
+}
+
+const TXS_PER_PAGE = 25;
+
+interface UseRecentTransactionsResult {
+  /** Current page of transactions */
+  transactions: ConfirmedTransaction[];
+  /** All fetched transactions */
+  allTransactions: ConfirmedTransaction[];
+  loading: boolean;
+  error: string | null;
+  blocksScanned: number;
+  page: number;
+  totalPages: number;
+  goToPage: (page: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+  refresh: () => void;
+}
+
+export function useRecentTransactions(
+  maxBlocks: number = 30,
+): UseRecentTransactionsResult {
+  const { network } = useNetwork();
+  const [allTransactions, setAllTransactions] = useState<
+    ConfirmedTransaction[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [blocksScanned, setBlocksScanned] = useState(0);
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(allTransactions.length / TXS_PER_PAGE),
+  );
+
+  // Current page slice
+  const transactions = useMemo(() => {
+    const start = (page - 1) * TXS_PER_PAGE;
+    return allTransactions.slice(start, start + TXS_PER_PAGE);
+  }, [allTransactions, page]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await fetchRecentTransactions(maxBlocks);
+      setAllTransactions(data.transactions);
+      setBlocksScanned(data.blocksScanned);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to fetch transactions',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [maxBlocks]);
+
+  // Reload when network changes
+  useEffect(() => {
+    setPage(1);
+    setAllTransactions([]);
+    loadData();
+  }, [network.id, loadData]);
+
+  const goToPage = useCallback(
+    (newPage: number) => {
+      if (newPage >= 1 && newPage <= totalPages) {
+        setPage(newPage);
+      }
+    },
+    [totalPages],
+  );
+
+  const nextPage = useCallback(() => {
+    if (page < totalPages) {
+      setPage(p => p + 1);
+    }
+  }, [page, totalPages]);
+
+  const prevPage = useCallback(() => {
+    if (page > 1) {
+      setPage(p => p - 1);
+    }
+  }, [page]);
+
+  const refresh = useCallback(() => {
+    setPage(1);
+    loadData();
+  }, [loadData]);
+
+  return {
+    transactions,
+    allTransactions,
+    loading,
+    error,
+    blocksScanned,
+    page,
+    totalPages,
+    goToPage,
+    nextPage,
+    prevPage,
+    refresh,
+  };
+}
+
+interface UsePaginatedTransactionsResult {
+  transactions: ConfirmedTransaction[];
+  loading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  totalBlockHeight: number;
+  page: number;
+  totalPages: number;
+  goToPage: (page: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+  refresh: () => void;
+}
+
+export function usePaginatedTransactions(
+  blocksPerPage: number = 50,
+): UsePaginatedTransactionsResult {
+  const { network } = useNetwork();
+  const [transactions, setTransactions] = useState<ConfirmedTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalBlockHeight, setTotalBlockHeight] = useState(0);
+
+  const totalPages = Math.max(1, Math.ceil(totalBlockHeight / blocksPerPage));
+
+  const loadPage = useCallback(
+    async (pageNum: number, forceRefresh: boolean = false) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        let cursor: number | undefined;
+        if (pageNum > 1 && totalBlockHeight > 0) {
+          cursor = totalBlockHeight - (pageNum - 1) * blocksPerPage + 1;
+          if (cursor <= 0) cursor = undefined;
+        }
+
+        const data = await fetchTransactionsPaginated(blocksPerPage, cursor);
+        setTransactions(data.transactions);
+        setHasMore(data.hasMore);
+
+        if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
+          setTotalBlockHeight(data.totalBlockHeight);
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch transactions',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [blocksPerPage, totalBlockHeight],
+  );
+
+  useEffect(() => {
+    setPage(1);
+    setTotalBlockHeight(0);
+    loadPage(1, true);
+  }, [network.id, blocksPerPage]);
+
+  useEffect(() => {
+    if (totalBlockHeight > 0) {
+      loadPage(page);
+    }
+  }, [page, totalBlockHeight]);
+
+  const goToPage = useCallback(
+    (newPage: number) => {
+      if (newPage >= 1 && newPage <= totalPages) {
+        setPage(newPage);
+      }
+    },
+    [totalPages],
+  );
+
+  const nextPage = useCallback(() => {
+    if (page < totalPages) {
+      setPage(p => p + 1);
+    }
+  }, [page, totalPages]);
+
+  const prevPage = useCallback(() => {
+    if (page > 1) {
+      setPage(p => p - 1);
+    }
+  }, [page]);
+
+  const refresh = useCallback(() => {
+    setPage(1);
+    loadPage(1, true);
+  }, [loadPage]);
+
+  return {
+    transactions,
+    loading,
+    error,
+    hasMore,
+    totalBlockHeight,
+    page,
+    totalPages,
+    goToPage,
+    nextPage,
+    prevPage,
+    refresh,
+  };
 }

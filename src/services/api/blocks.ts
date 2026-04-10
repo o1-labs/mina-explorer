@@ -1,4 +1,5 @@
 import { getClient } from './client';
+import { queryDaemon, isDaemonUnavailableError } from './daemon';
 import type { BlockSummary, BlockDetail, NetworkState } from '@/types';
 
 // Full query with protocolState, networkState, and transaction counts
@@ -33,6 +34,7 @@ const BLOCKS_QUERY_FULL = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -62,6 +64,7 @@ const BLOCKS_QUERY_BASIC = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -85,6 +88,7 @@ const BLOCKS_QUERY_MINIMAL = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -146,7 +150,7 @@ const BLOCKS_QUERY_PAGINATED_MINIMAL = `
   }
 `;
 
-// Full block detail query with transactions
+// Full block detail query with transactions (archive flat format)
 const BLOCK_DETAIL_QUERY = `
   query GetBlockByHeight($blockHeightGte: Int!, $blockHeightLt: Int!) {
     blocks(
@@ -155,6 +159,7 @@ const BLOCK_DETAIL_QUERY = `
     ) {
       blockHeight
       stateHash
+      parentHash
       creator
       dateTime
       transactions {
@@ -172,28 +177,11 @@ const BLOCK_DETAIL_QUERY = `
         }
         zkappCommands {
           hash
-          failureReasons {
-            failures
-          }
-          zkappCommand {
-            memo
-            feePayer {
-              body {
-                publicKey
-                fee
-              }
-            }
-            accountUpdates {
-              body {
-                publicKey
-                tokenId
-                balanceChange {
-                  magnitude
-                  sgn
-                }
-              }
-            }
-          }
+          feePayer
+          fee
+          memo
+          status
+          failureReason
         }
         feeTransfer {
           recipient
@@ -205,12 +193,14 @@ const BLOCK_DETAIL_QUERY = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
 `;
 
-// Fallback query without full transaction details
+// Fallback query without full transaction details (no parentHash for
+// archive nodes that haven't been updated with the parentHash field yet)
 const BLOCK_BY_HEIGHT_QUERY = `
   query GetBlockByHeight($blockHeightGte: Int!, $blockHeightLt: Int!) {
     blocks(
@@ -228,6 +218,7 @@ const BLOCK_BY_HEIGHT_QUERY = `
     networkState {
       maxBlockHeight {
         canonicalMaxBlockHeight
+        pendingMaxBlockHeight
       }
     }
   }
@@ -266,6 +257,7 @@ interface ApiBlock {
 interface ApiBlockDetail {
   blockHeight: number;
   stateHash: string;
+  parentHash?: string;
   creator: string;
   dateTime: string;
   transactions: {
@@ -283,26 +275,11 @@ interface ApiBlockDetail {
     }>;
     zkappCommands?: Array<{
       hash: string;
-      failureReasons: Array<{ failures: string[] }> | null;
-      zkappCommand: {
-        memo: string;
-        feePayer: {
-          body: {
-            publicKey: string;
-            fee: string;
-          };
-        };
-        accountUpdates: Array<{
-          body: {
-            publicKey: string;
-            tokenId: string;
-            balanceChange: {
-              magnitude: string;
-              sgn: string;
-            };
-          };
-        }>;
-      };
+      feePayer: string;
+      fee: string;
+      memo: string;
+      status: string;
+      failureReason: string | null;
     }>;
     feeTransfer?: Array<{
       recipient: string;
@@ -317,6 +294,7 @@ interface BlockDetailResponse {
   networkState: {
     maxBlockHeight: {
       canonicalMaxBlockHeight: number;
+      pendingMaxBlockHeight: number;
     };
   };
 }
@@ -326,6 +304,7 @@ interface BlocksResponse {
   networkState: {
     maxBlockHeight: {
       canonicalMaxBlockHeight: number;
+      pendingMaxBlockHeight: number;
     };
   };
 }
@@ -379,7 +358,7 @@ function mapApiBlockToDetail(
   return {
     blockHeight: block.blockHeight,
     stateHash: block.stateHash,
-    parentHash: '',
+    parentHash: block.parentHash ?? '',
     creator: block.creator,
     creatorAccount: { publicKey: block.creator },
     dateTime: block.dateTime,
@@ -394,7 +373,7 @@ function mapApiBlockToDetail(
         slot: 0,
         blockHeight: block.blockHeight,
       },
-      previousStateHash: '',
+      previousStateHash: block.parentHash ?? '',
     },
     transactions: {
       userCommands: (block.transactions.userCommands || []).map(cmd => ({
@@ -412,18 +391,16 @@ function mapApiBlockToDetail(
       zkappCommands: (block.transactions.zkappCommands || []).map(cmd => ({
         hash: cmd.hash,
         zkappCommand: {
-          memo: cmd.zkappCommand.memo,
-          feePayer: cmd.zkappCommand.feePayer,
-          accountUpdates: cmd.zkappCommand.accountUpdates.map(update => ({
+          memo: cmd.memo,
+          feePayer: {
             body: {
-              publicKey: update.body.publicKey,
-              tokenId: update.body.tokenId,
-              balanceChange: update.body.balanceChange,
-              callDepth: 0,
+              publicKey: cmd.feePayer,
+              fee: cmd.fee,
             },
-          })),
+          },
+          accountUpdates: [],
         },
-        failureReason: cmd.failureReasons?.flatMap(fr => fr.failures) || null,
+        failureReason: cmd.failureReason ? [cmd.failureReason] : null,
         dateTime: block.dateTime,
       })),
       feeTransfer: (block.transactions.feeTransfer || []).map(ft => ({
@@ -592,75 +569,327 @@ export async function fetchBlocksPaginated(
   };
 }
 
+interface DaemonBlockResponse {
+  block: {
+    stateHash: string;
+    dateTime: string;
+    protocolState: {
+      consensusState: {
+        blockHeight: string;
+        epoch: string;
+        slot: string;
+      };
+      previousStateHash: string;
+    };
+    transactions: {
+      coinbase: string;
+      userCommands: Array<{
+        hash: string;
+        kind: string;
+        from: string;
+        to: string;
+        amount: string;
+        fee: string;
+        memo: string;
+        nonce: number;
+        failureReason: string | null;
+      }>;
+      zkappCommands: Array<{
+        hash: string;
+        failureReasons: Array<{ failures: string[] }> | null;
+        zkappCommand: {
+          memo: string;
+          feePayer: {
+            body: {
+              publicKey: string;
+              fee: string;
+            };
+          };
+          accountUpdates: Array<{
+            body: {
+              publicKey: string;
+              tokenId: string;
+              balanceChange: {
+                magnitude: string;
+                sgn: string;
+              };
+            };
+          }>;
+        };
+      }>;
+      feeTransfer: Array<{
+        recipient: string;
+        fee: string;
+        type: string;
+      }>;
+    };
+  };
+}
+
+interface DaemonBlockData {
+  transactions: BlockDetail['transactions'];
+  previousStateHash: string;
+}
+
+function buildDaemonBlockQuery(blockHeight: number, full: boolean): string {
+  const zkappFields = full
+    ? `hash
+          failureReasons {
+            failures
+          }
+          zkappCommand {
+            memo
+            feePayer {
+              body {
+                publicKey
+                fee
+              }
+            }
+            accountUpdates {
+              body {
+                publicKey
+                tokenId
+                balanceChange {
+                  magnitude
+                  sgn
+                }
+              }
+            }
+          }`
+    : `hash
+          zkappCommand {
+            memo
+            feePayer {
+              body {
+                publicKey
+                fee
+              }
+            }
+            accountUpdates {
+              body {
+                publicKey
+                tokenId
+                balanceChange {
+                  magnitude
+                  sgn
+                }
+              }
+            }
+          }`;
+
+  return `{
+    block(height: ${blockHeight}) {
+      protocolState {
+        previousStateHash
+      }
+      transactions {
+        coinbase
+        userCommands {
+          hash
+          kind
+          from
+          to
+          amount
+          fee
+          memo
+          nonce
+          failureReason
+        }
+        zkappCommands {
+          ${zkappFields}
+        }
+        feeTransfer {
+          recipient
+          fee
+          type
+        }
+      }
+    }
+  }`;
+}
+
+function mapDaemonResponse(data: DaemonBlockResponse): DaemonBlockData {
+  const txs = data.block.transactions;
+  const previousStateHash = data.block.protocolState?.previousStateHash ?? '';
+  return {
+    previousStateHash,
+    transactions: {
+      userCommands: (txs.userCommands || []).map(cmd => ({
+        hash: cmd.hash,
+        kind: cmd.kind,
+        from: cmd.from,
+        to: cmd.to,
+        amount: cmd.amount,
+        fee: cmd.fee,
+        memo: cmd.memo,
+        nonce: cmd.nonce,
+        failureReason: cmd.failureReason,
+        dateTime: '',
+      })),
+      zkappCommands: (txs.zkappCommands || []).map(cmd => ({
+        hash: cmd.hash,
+        zkappCommand: {
+          memo: cmd.zkappCommand.memo,
+          feePayer: cmd.zkappCommand.feePayer,
+          accountUpdates: cmd.zkappCommand.accountUpdates.map(u => ({
+            body: {
+              publicKey: u.body.publicKey,
+              tokenId: u.body.tokenId,
+              balanceChange: u.body.balanceChange,
+              callDepth: 0,
+            },
+          })),
+        },
+        failureReason: cmd.failureReasons?.flatMap(fr => fr.failures) || null,
+        dateTime: '',
+      })),
+      feeTransfer: (txs.feeTransfer || []).map(ft => ({
+        recipient: ft.recipient,
+        fee: ft.fee,
+        type: ft.type,
+      })),
+      coinbase: txs.coinbase,
+    },
+  };
+}
+
+async function fetchBlockDataFromDaemon(
+  blockHeight: number,
+): Promise<DaemonBlockData | null> {
+  // Try full query first, then fall back to simplified (without failureReasons
+  // which some daemon versions don't support on ZkappCommandResult)
+  for (const full of [true, false]) {
+    try {
+      const query = buildDaemonBlockQuery(blockHeight, full);
+      const data = await queryDaemon<DaemonBlockResponse>(query);
+      return mapDaemonResponse(data);
+    } catch (error) {
+      if (isDaemonUnavailableError(error)) {
+        console.log(
+          '[API] Daemon unavailable for block transactions, skipping...',
+        );
+        return null;
+      }
+      if (full) {
+        console.log(
+          '[API] Full daemon block query failed, trying simplified...',
+        );
+        continue;
+      }
+      console.log('[API] Daemon block query failed:', error);
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function fetchBlockByHeight(
   blockHeight: number,
 ): Promise<BlockDetail | null> {
   const client = getClient();
 
-  // Try detailed query first
+  // Get basic block info from archive (works for all blocks)
+  let block: BlockDetail | null = null;
   try {
     const data = await client.query<BlockDetailResponse>(BLOCK_DETAIL_QUERY, {
       blockHeightGte: blockHeight,
       blockHeightLt: blockHeight + 1,
     });
-    if (data.blocks.length === 0) {
-      return null;
+    if (data.blocks.length > 0) {
+      const canonicalMax =
+        data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
+      block = mapApiBlockToDetail(data.blocks[0], canonicalMax);
     }
-    const canonicalMax =
-      data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
-    return mapApiBlockToDetail(data.blocks[0], canonicalMax);
-  } catch (error) {
-    // Fallback to basic query if detailed query fails
-    console.log(
-      '[API] Detailed block query failed, trying basic query...',
-      error,
-    );
-    const data = await client.query<BlocksResponse>(BLOCK_BY_HEIGHT_QUERY, {
-      blockHeightGte: blockHeight,
-      blockHeightLt: blockHeight + 1,
-    });
-    if (data.blocks.length === 0) {
-      return null;
+  } catch {
+    try {
+      const data = await client.query<BlocksResponse>(BLOCK_BY_HEIGHT_QUERY, {
+        blockHeightGte: blockHeight,
+        blockHeightLt: blockHeight + 1,
+      });
+      if (data.blocks.length > 0) {
+        const canonicalMax =
+          data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
+        block = mapBasicBlockToDetail(data.blocks[0], canonicalMax);
+      }
+    } catch (archiveError) {
+      console.log('[API] Archive block query failed:', archiveError);
     }
-    const canonicalMax =
-      data.networkState.maxBlockHeight.canonicalMaxBlockHeight;
-    return mapBasicBlockToDetail(data.blocks[0], canonicalMax);
   }
+
+  if (!block) {
+    return null;
+  }
+
+  // Try to enrich with transaction data and parentHash from daemon
+  const daemonData = await fetchBlockDataFromDaemon(blockHeight);
+  if (daemonData) {
+    block.transactions = daemonData.transactions;
+    if (!block.parentHash && daemonData.previousStateHash) {
+      block.parentHash = daemonData.previousStateHash;
+      block.protocolState.previousStateHash = daemonData.previousStateHash;
+    }
+  }
+
+  return block;
+}
+
+const BLOCKS_HASH_SEARCH_QUERY = `
+  query SearchBlockByHash($limit: Int!) {
+    blocks(limit: $limit, sortBy: BLOCKHEIGHT_DESC) {
+      blockHeight
+      stateHash
+    }
+  }
+`;
+
+const BLOCKS_HASH_SEARCH_QUERY_PAGINATED = `
+  query SearchBlockByHashPaginated($limit: Int!, $maxBlockHeight: Int!) {
+    blocks(query: { blockHeight_lt: $maxBlockHeight }, limit: $limit, sortBy: BLOCKHEIGHT_DESC) {
+      blockHeight
+      stateHash
+    }
+  }
+`;
+
+interface HashSearchResponse {
+  blocks: Array<{ blockHeight: number; stateHash: string }>;
 }
 
 export async function fetchBlockByHash(
   stateHash: string,
 ): Promise<BlockDetail | null> {
-  // The API doesn't support querying by stateHash directly
-  // We need to search through recent blocks to find the height, then fetch details
   const client = getClient();
+  const CHUNK_SIZE = 500;
+  const MAX_CHUNKS = 10;
 
-  let data: BlocksResponse;
-  try {
-    data = await client.query<BlocksResponse>(BLOCKS_QUERY_FULL, {
-      limit: 100,
-    });
-  } catch {
-    // Fallback to basic query
-    try {
-      data = await client.query<BlocksResponse>(BLOCKS_QUERY_BASIC, {
-        limit: 100,
-      });
-    } catch {
-      // Fallback to minimal query (mainnet doesn't support userCommands/zkappCommands)
-      data = await client.query<BlocksResponse>(BLOCKS_QUERY_MINIMAL, {
-        limit: 100,
-      });
+  let cursor: number | undefined;
+
+  for (let i = 0; i < MAX_CHUNKS; i++) {
+    const query = cursor
+      ? BLOCKS_HASH_SEARCH_QUERY_PAGINATED
+      : BLOCKS_HASH_SEARCH_QUERY;
+    const variables: Record<string, unknown> = { limit: CHUNK_SIZE };
+    if (cursor) {
+      variables.maxBlockHeight = cursor;
     }
+
+    const data = await client.query<HashSearchResponse>(query, variables);
+
+    const match = data.blocks.find(b => b.stateHash === stateHash);
+    if (match) {
+      return fetchBlockByHeight(match.blockHeight);
+    }
+
+    // No more blocks to search
+    if (data.blocks.length < CHUNK_SIZE) {
+      break;
+    }
+
+    // Move cursor to oldest block in this chunk
+    cursor = data.blocks[data.blocks.length - 1].blockHeight;
   }
 
-  const block = data.blocks.find(b => b.stateHash === stateHash);
-  if (!block) {
-    return null;
-  }
-
-  // Fetch full block details by height
-  return fetchBlockByHeight(block.blockHeight);
+  return null;
 }
 
 export async function fetchNetworkState(): Promise<NetworkState> {

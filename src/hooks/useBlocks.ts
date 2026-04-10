@@ -6,6 +6,7 @@ import {
   fetchBlockByHash,
   fetchNetworkState,
 } from '@/services/api';
+import { fetchEpochInfo, type EpochInfo } from '@/services/api/daemon';
 import { useNetwork } from './useNetwork';
 import type { BlockSummary, BlockDetail, NetworkState } from '@/types';
 
@@ -234,4 +235,24 @@ export function usePaginatedBlocks(
     prevPage,
     refresh,
   };
+}
+
+interface UseEpochInfoResult {
+  epochInfo: EpochInfo | null;
+  loading: boolean;
+}
+
+export function useEpochInfo(): UseEpochInfoResult {
+  const { network } = useNetwork();
+  const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchEpochInfo()
+      .then(data => setEpochInfo(data))
+      .finally(() => setLoading(false));
+  }, [network.id]);
+
+  return { epochInfo, loading };
 }
