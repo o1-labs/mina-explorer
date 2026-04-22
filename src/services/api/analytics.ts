@@ -56,7 +56,7 @@ const BLOCKS_ANALYTICS_QUERY = `
   }
 `;
 
-// Fallback query without zkappCommands
+// Fallback query without txFees (archive may not support it) but keeps zkApp counts
 const BLOCKS_ANALYTICS_QUERY_BASIC = `
   query BlocksAnalyticsBasic($limit: Int, $dateTime_gte: DateTime) {
     blocks(
@@ -66,9 +66,11 @@ const BLOCKS_ANALYTICS_QUERY_BASIC = `
     ) {
       blockHeight
       dateTime
-      txFees
       transactions {
         userCommands {
+          hash
+        }
+        zkappCommands {
           hash
         }
       }

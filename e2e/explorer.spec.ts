@@ -853,6 +853,28 @@ test.describe('zkApps Page', () => {
 
     await expect(table.or(noActivity)).toBeVisible({ timeout: 15000 });
   });
+
+  test('zkApps page shows zkApp data from flat schema', async ({ page }) => {
+    await page.goto('/#/zkapps');
+
+    // The mock data contains zkApp commands in flat format
+    // The page should show recent transactions section
+    await expect(page.locator('text=Recent zkApp Transactions')).toBeVisible({
+      timeout: 15000,
+    });
+  });
+
+  test('zkApp transaction detail loads via flat schema', async ({ page }) => {
+    await page.goto(`/#/tx/${FIXTURES.transactions.zkAppCommand}`);
+
+    // Should find the zkApp transaction and show details
+    await expect(page.locator('text=Transaction Details')).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Should show zkApp type badge
+    await expect(page.getByText('zkApp', { exact: true })).toBeVisible();
+  });
 });
 
 test.describe('MINA Price Display', () => {

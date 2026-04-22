@@ -196,10 +196,12 @@ async function handleArchiveRequest(route: Route): Promise<void> {
       return;
     }
 
-    // Handle paginated transaction queries (archive with transaction fields)
+    // Handle transaction search queries (full, flat, and paginated)
     if (
       query.includes('GetTransactions') ||
-      query.includes('GetTransactionsPaginated')
+      query.includes('GetTransactionsPaginated') ||
+      query.includes('SearchTransactionFlat') ||
+      query.includes('GetZkAppActivityFlat')
     ) {
       await route.fulfill({
         status: 200,

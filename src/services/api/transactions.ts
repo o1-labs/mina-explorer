@@ -191,7 +191,42 @@ const SEARCH_TRANSACTION_QUERY_FULL = `
   }
 `;
 
-// Fallback query without zkappCommands (for endpoints that don't support it)
+// Fallback query with flat zkApp schema (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
+const SEARCH_TRANSACTION_QUERY_FLAT = `
+  query SearchTransactionFlat($limit: Int!) {
+    blocks(
+      limit: $limit
+      sortBy: BLOCKHEIGHT_DESC
+    ) {
+      blockHeight
+      stateHash
+      dateTime
+      transactions {
+        userCommands {
+          hash
+          kind
+          from
+          to
+          amount
+          fee
+          memo
+          nonce
+          failureReason
+        }
+        zkappCommands {
+          hash
+          feePayer
+          fee
+          memo
+          status
+          failureReason
+        }
+      }
+    }
+  }
+`;
+
+// Last-resort query without zkappCommands (for endpoints without transaction details)
 const SEARCH_TRANSACTION_QUERY_BASIC = `
   query SearchTransactionBasic($limit: Int!) {
     blocks(
@@ -252,6 +287,35 @@ interface SearchTransactionResponse {
             };
           }>;
         };
+      }>;
+    };
+  }>;
+}
+
+interface SearchTransactionFlatResponse {
+  blocks: Array<{
+    blockHeight: number;
+    stateHash: string;
+    dateTime: string;
+    transactions: {
+      userCommands: Array<{
+        hash: string;
+        kind: string;
+        from: string;
+        to: string;
+        amount: string;
+        fee: string;
+        memo: string;
+        nonce: number;
+        failureReason: string | null;
+      }>;
+      zkappCommands: Array<{
+        hash: string;
+        feePayer: string;
+        fee: string;
+        memo: string;
+        status: string;
+        failureReason: string | null;
       }>;
     };
   }>;
@@ -360,7 +424,56 @@ export async function fetchTransactionByHash(
     return null;
   };
 
-  // Try full query first (with zkappCommands)
+  // Helper to search flat-schema blocks for the transaction
+  const searchBlocksFlat = (
+    data: SearchTransactionFlatResponse,
+  ): TransactionDetail | null => {
+    for (const block of data.blocks) {
+      const userCmd = block.transactions.userCommands?.find(
+        tx => tx.hash === hash,
+      );
+      if (userCmd) {
+        return {
+          hash: userCmd.hash,
+          type: 'user_command',
+          status: 'confirmed',
+          blockHeight: block.blockHeight,
+          blockStateHash: block.stateHash,
+          dateTime: block.dateTime,
+          kind: userCmd.kind,
+          from: userCmd.from,
+          to: userCmd.to,
+          amount: userCmd.amount,
+          fee: userCmd.fee,
+          memo: userCmd.memo,
+          nonce: userCmd.nonce,
+          failureReason: userCmd.failureReason,
+        };
+      }
+
+      const zkAppCmd = block.transactions.zkappCommands?.find(
+        tx => tx.hash === hash,
+      );
+      if (zkAppCmd) {
+        return {
+          hash: zkAppCmd.hash,
+          type: 'zkapp_command',
+          status: 'confirmed',
+          blockHeight: block.blockHeight,
+          blockStateHash: block.stateHash,
+          dateTime: block.dateTime,
+          feePayer: zkAppCmd.feePayer,
+          fee: zkAppCmd.fee,
+          memo: zkAppCmd.memo,
+          failureReason: zkAppCmd.failureReason,
+        };
+      }
+    }
+    return null;
+  };
+
+  // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps)
+  // Try nested query first (works for daemon endpoints)
   try {
     const data = await client.query<SearchTransactionResponse>(
       SEARCH_TRANSACTION_QUERY_FULL,
@@ -369,27 +482,39 @@ export async function fetchTransactionByHash(
     const result = searchBlocks(data);
     if (result) return result;
   } catch (error) {
-    // Check if zkappCommands is not supported
     const errorMessage = error instanceof Error ? error.message : '';
     if (
       errorMessage.includes('zkappCommands') ||
       errorMessage.includes('Cannot query field')
     ) {
-      // Fall back to basic query without zkappCommands
-      console.log('[API] zkappCommands not supported, using basic query...');
-      try {
-        const data = await client.query<SearchTransactionResponse>(
-          SEARCH_TRANSACTION_QUERY_BASIC,
-          { limit: 1000 },
-        );
-        const result = searchBlocks(data);
-        if (result) return result;
-      } catch (basicError) {
-        console.error('[API] Error with basic transaction search:', basicError);
-      }
+      // Nested schema not supported — skip to flat and basic below
     } else {
       console.error('[API] Error searching for transaction:', error);
     }
+  }
+
+  // Try flat query (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
+  try {
+    const data = await client.query<SearchTransactionFlatResponse>(
+      SEARCH_TRANSACTION_QUERY_FLAT,
+      { limit: 1000 },
+    );
+    const result = searchBlocksFlat(data);
+    if (result) return result;
+  } catch {
+    // Flat query failed — try basic (no zkApp data)
+  }
+
+  // Last resort: basic query (no zkappCommands at all)
+  try {
+    const data = await client.query<SearchTransactionResponse>(
+      SEARCH_TRANSACTION_QUERY_BASIC,
+      { limit: 1000 },
+    );
+    const result = searchBlocks(data);
+    if (result) return result;
+  } catch (basicError) {
+    console.error('[API] Error with basic transaction search:', basicError);
   }
 
   return null;
@@ -473,7 +598,55 @@ export async function fetchAccountTransactions(
     }
   };
 
-  // Try full query first
+  // Helper to extract from flat-schema blocks
+  const extractTransactionsFlat = (
+    data: SearchTransactionFlatResponse,
+  ): void => {
+    for (const block of data.blocks) {
+      for (const cmd of block.transactions.userCommands || []) {
+        if (cmd.from === publicKey) {
+          transactions.push({
+            hash: cmd.hash,
+            type: 'sent',
+            kind: cmd.kind,
+            counterparty: cmd.to,
+            amount: cmd.amount,
+            fee: cmd.fee,
+            blockHeight: block.blockHeight,
+            dateTime: block.dateTime,
+            memo: cmd.memo,
+          });
+        } else if (cmd.to === publicKey) {
+          transactions.push({
+            hash: cmd.hash,
+            type: 'received',
+            kind: cmd.kind,
+            counterparty: cmd.from,
+            amount: cmd.amount,
+            fee: cmd.fee,
+            blockHeight: block.blockHeight,
+            dateTime: block.dateTime,
+            memo: cmd.memo,
+          });
+        }
+      }
+
+      for (const cmd of block.transactions.zkappCommands || []) {
+        if (cmd.feePayer === publicKey) {
+          transactions.push({
+            hash: cmd.hash,
+            type: 'zkapp',
+            fee: cmd.fee,
+            blockHeight: block.blockHeight,
+            dateTime: block.dateTime,
+            memo: cmd.memo,
+          });
+        }
+      }
+    }
+  };
+
+  // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps)
   try {
     const data = await client.query<SearchTransactionResponse>(
       SEARCH_TRANSACTION_QUERY_FULL,
@@ -481,27 +654,33 @@ export async function fetchAccountTransactions(
     );
     extractTransactions(data);
   } catch (error) {
-    // Check if zkappCommands is not supported
     const errorMessage = error instanceof Error ? error.message : '';
-    if (
+    const unsupported =
       errorMessage.includes('zkappCommands') ||
-      errorMessage.includes('Cannot query field')
-    ) {
-      // Fall back to basic query
-      console.log(
-        '[API] zkappCommands not supported, using basic query for account transactions...',
-      );
+      errorMessage.includes('Cannot query field');
+
+    if (unsupported) {
+      // Try flat schema
       try {
-        const data = await client.query<SearchTransactionResponse>(
-          SEARCH_TRANSACTION_QUERY_BASIC,
+        const data = await client.query<SearchTransactionFlatResponse>(
+          SEARCH_TRANSACTION_QUERY_FLAT,
           { limit },
         );
-        extractTransactions(data);
-      } catch (basicError) {
-        console.error(
-          '[API] Error with basic account transactions:',
-          basicError,
-        );
+        extractTransactionsFlat(data);
+      } catch {
+        // Flat also failed — try basic (no zkApp data)
+        try {
+          const data = await client.query<SearchTransactionResponse>(
+            SEARCH_TRANSACTION_QUERY_BASIC,
+            { limit },
+          );
+          extractTransactions(data);
+        } catch (basicError) {
+          console.error(
+            '[API] Error with basic account transactions:',
+            basicError,
+          );
+        }
       }
     } else {
       console.error('[API] Error fetching account transactions:', error);

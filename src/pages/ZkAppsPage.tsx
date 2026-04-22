@@ -22,7 +22,8 @@ interface ZkAppSummary {
   latestTxHash: string;
 }
 
-const ZKAPP_ACTIVITY_QUERY = `
+// Nested schema (daemon endpoints)
+const ZKAPP_ACTIVITY_QUERY_NESTED = `
   query GetZkAppActivity($limit: Int!) {
     blocks(
       limit: $limit
@@ -52,7 +53,28 @@ const ZKAPP_ACTIVITY_QUERY = `
   }
 `;
 
-interface ZkAppActivityResponse {
+// Flat schema (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
+const ZKAPP_ACTIVITY_QUERY_FLAT = `
+  query GetZkAppActivityFlat($limit: Int!) {
+    blocks(
+      limit: $limit
+      sortBy: BLOCKHEIGHT_DESC
+    ) {
+      blockHeight
+      dateTime
+      transactions {
+        zkappCommands {
+          hash
+          feePayer
+          fee
+          memo
+        }
+      }
+    }
+  }
+`;
+
+interface ZkAppActivityNestedResponse {
   blocks: Array<{
     blockHeight: number;
     dateTime: string;
@@ -77,6 +99,21 @@ interface ZkAppActivityResponse {
   }>;
 }
 
+interface ZkAppActivityFlatResponse {
+  blocks: Array<{
+    blockHeight: number;
+    dateTime: string;
+    transactions: {
+      zkappCommands: Array<{
+        hash: string;
+        feePayer: string;
+        fee: string;
+        memo: string;
+      }>;
+    };
+  }>;
+}
+
 export function ZkAppsPage(): ReactNode {
   const [activities, setActivities] = useState<ZkAppActivity[]>([]);
   const [zkApps, setZkApps] = useState<ZkAppSummary[]>([]);
@@ -91,49 +128,76 @@ export function ZkAppsPage(): ReactNode {
 
       try {
         const client = getClient();
-        let data: ZkAppActivityResponse;
+        const allActivities: ZkAppActivity[] = [];
 
+        // Helper to extract from nested schema
+        const extractNested = (data: ZkAppActivityNestedResponse): void => {
+          for (const block of data.blocks) {
+            for (const cmd of block.transactions.zkappCommands || []) {
+              const affectedAccounts = cmd.zkappCommand.accountUpdates
+                .map(u => u.body.publicKey)
+                .filter((pk, idx, arr) => arr.indexOf(pk) === idx);
+
+              allActivities.push({
+                hash: cmd.hash,
+                feePayer: cmd.zkappCommand.feePayer.body.publicKey,
+                affectedAccounts,
+                memo: cmd.zkappCommand.memo,
+                blockHeight: block.blockHeight,
+                dateTime: block.dateTime,
+              });
+            }
+          }
+        };
+
+        // Helper to extract from flat schema
+        const extractFlat = (data: ZkAppActivityFlatResponse): void => {
+          for (const block of data.blocks) {
+            for (const cmd of block.transactions.zkappCommands || []) {
+              allActivities.push({
+                hash: cmd.hash,
+                feePayer: cmd.feePayer,
+                affectedAccounts: [],
+                memo: cmd.memo,
+                blockHeight: block.blockHeight,
+                dateTime: block.dateTime,
+              });
+            }
+          }
+        };
+
+        // Fallback chain: nested → flat → error
         try {
-          data = await client.query<ZkAppActivityResponse>(
-            ZKAPP_ACTIVITY_QUERY,
+          const data = await client.query<ZkAppActivityNestedResponse>(
+            ZKAPP_ACTIVITY_QUERY_NESTED,
             { limit: 500 },
           );
-        } catch (queryError) {
-          // Check if the error is about zkappCommands not being available
+          extractNested(data);
+        } catch (nestedError) {
           const errorMessage =
-            queryError instanceof Error ? queryError.message : '';
+            nestedError instanceof Error ? nestedError.message : '';
           if (
             errorMessage.includes('zkappCommands') ||
             errorMessage.includes('Cannot query field')
           ) {
-            // zkappCommands not supported on this network/endpoint
-            setActivities([]);
-            setZkApps([]);
-            setError(
-              'zkApp data is not available on the current network endpoint. ' +
-                'Try switching to a different network or endpoint that supports zkApp queries.',
-            );
-            return;
-          }
-          throw queryError;
-        }
-
-        // Extract zkApp activities from blocks
-        const allActivities: ZkAppActivity[] = [];
-        for (const block of data.blocks) {
-          for (const cmd of block.transactions.zkappCommands || []) {
-            const affectedAccounts = cmd.zkappCommand.accountUpdates
-              .map(u => u.body.publicKey)
-              .filter((pk, idx, arr) => arr.indexOf(pk) === idx); // unique
-
-            allActivities.push({
-              hash: cmd.hash,
-              feePayer: cmd.zkappCommand.feePayer.body.publicKey,
-              affectedAccounts,
-              memo: cmd.zkappCommand.memo,
-              blockHeight: block.blockHeight,
-              dateTime: block.dateTime,
-            });
+            // Try flat schema
+            try {
+              const data = await client.query<ZkAppActivityFlatResponse>(
+                ZKAPP_ACTIVITY_QUERY_FLAT,
+                { limit: 500 },
+              );
+              extractFlat(data);
+            } catch {
+              setActivities([]);
+              setZkApps([]);
+              setError(
+                'zkApp data is not available on the current network endpoint. ' +
+                  'Try switching to a different network or endpoint that supports zkApp queries.',
+              );
+              return;
+            }
+          } else {
+            throw nestedError;
           }
         }
 
