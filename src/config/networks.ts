@@ -56,6 +56,16 @@ const COMPILED_NETWORKS: Record<string, NetworkConfig> = {
       },
     ],
   },
+  'trailblazer-mut': {
+    id: 'trailblazer-mut',
+    name: 'trailblazer-mut',
+    displayName: 'Trailblazer MUT',
+    archiveEndpoint:
+      'https://archive-node-api.mesa-mut.minaprotocol.com',
+    daemonEndpoint:
+      'https://plain-1-graphql.mesa-mut.minaprotocol.com/graphql',
+    isTestnet: true,
+  },
   devnet: {
     id: 'devnet',
     name: 'devnet',
