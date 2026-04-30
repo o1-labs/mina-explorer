@@ -98,7 +98,9 @@ export function Header(): ReactNode {
         <div
           className={cn(
             'overflow-hidden transition-all duration-200 lg:hidden',
-            mobileMenuOpen ? 'max-h-[600px] pb-4' : 'max-h-0',
+            mobileMenuOpen
+              ? 'max-h-[calc(100dvh-4rem)] overflow-y-auto pb-4'
+              : 'max-h-0',
           )}
         >
           <nav className="flex flex-col gap-2 pt-2">
