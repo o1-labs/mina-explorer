@@ -10,9 +10,11 @@ import accountFixture from './fixtures/account.json' with { type: 'json' };
 // a realistic remote custom endpoint. The bug is about routing, not the scheme.
 const CUSTOM_URL = 'https://custom-daemon.test/graphql';
 
-// Preset daemon endpoints all look like *plain*.gcp.o1test.net/graphql — a hit
-// here means a daemon call leaked to a preset network (the bug this fixes).
-const PRESET_DAEMON_GLOB = '**/*plain*.gcp.o1test.net/**';
+// Every preset daemon URL contains "plain" and ends in "/graphql" (mesa,
+// pre-mesa, devnet, mainnet, mesa-mut, ...). A hit here means a daemon call
+// leaked to a preset network — the bug this fixes. Kept broad on purpose so it
+// catches every preset host, not just the current default network.
+const PRESET_DAEMON = /plain.*graphql/;
 
 async function activateCustomEndpoint(
   page: import('@playwright/test').Page,
@@ -49,7 +51,7 @@ async function activateCustomEndpoint(
   });
 
   let hit = false;
-  await page.route(PRESET_DAEMON_GLOB, async route => {
+  await page.route(PRESET_DAEMON, async route => {
     hit = true;
     await route.fallback();
   });

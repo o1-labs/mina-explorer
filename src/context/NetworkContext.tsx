@@ -19,6 +19,7 @@ import {
   setStoredItem,
   removeStoredItem,
 } from '@/lib/safeStorage';
+import { isSafeUrl } from '@/utils/formatters';
 
 const NETWORK_KEY = 'mina-explorer-network';
 const NETWORK_PARAM = 'network';
@@ -33,15 +34,6 @@ interface NetworkContextValue {
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
 
-function isValidEndpointUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
 function getInitialEndpoint(): {
   network: NetworkConfig;
   customEndpoint: string | null;
@@ -49,7 +41,7 @@ function getInitialEndpoint(): {
   // Custom endpoint always wins — it's an explicit local override.
   const savedCustom = getStoredItem(CUSTOM_ENDPOINT_KEY);
   if (savedCustom) {
-    if (!isValidEndpointUrl(savedCustom)) {
+    if (!isSafeUrl(savedCustom)) {
       removeStoredItem(CUSTOM_ENDPOINT_KEY);
     } else {
       return {
@@ -142,7 +134,7 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
 
   const setCustomEndpoint = (endpoint: string | null): void => {
     if (endpoint) {
-      if (!isValidEndpointUrl(endpoint)) return;
+      if (!isSafeUrl(endpoint)) return;
       const customNetwork: NetworkConfig = {
         id: 'custom',
         name: 'custom',
