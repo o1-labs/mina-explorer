@@ -531,6 +531,8 @@ export interface AccountTransaction {
   blockHeight: number;
   dateTime: string;
   memo?: string | undefined;
+  // Non-empty when the command failed on-chain (funds did not move).
+  failureReason?: string | null | undefined;
 }
 
 /**
@@ -560,6 +562,7 @@ export async function fetchAccountTransactions(
             blockHeight: block.blockHeight,
             dateTime: block.dateTime,
             memo: cmd.memo,
+            failureReason: cmd.failureReason,
           });
         } else if (cmd.to === publicKey) {
           transactions.push({
@@ -572,6 +575,7 @@ export async function fetchAccountTransactions(
             blockHeight: block.blockHeight,
             dateTime: block.dateTime,
             memo: cmd.memo,
+            failureReason: cmd.failureReason,
           });
         }
       }
@@ -592,6 +596,8 @@ export async function fetchAccountTransactions(
             blockHeight: block.blockHeight,
             dateTime: block.dateTime,
             memo: cmd.zkappCommand.memo,
+            failureReason:
+              cmd.failureReasons?.flatMap(fr => fr.failures).join(', ') || null,
           });
         }
       }
@@ -615,6 +621,7 @@ export async function fetchAccountTransactions(
             blockHeight: block.blockHeight,
             dateTime: block.dateTime,
             memo: cmd.memo,
+            failureReason: cmd.failureReason,
           });
         } else if (cmd.to === publicKey) {
           transactions.push({
@@ -627,6 +634,7 @@ export async function fetchAccountTransactions(
             blockHeight: block.blockHeight,
             dateTime: block.dateTime,
             memo: cmd.memo,
+            failureReason: cmd.failureReason,
           });
         }
       }
@@ -640,6 +648,7 @@ export async function fetchAccountTransactions(
             blockHeight: block.blockHeight,
             dateTime: block.dateTime,
             memo: cmd.memo,
+            failureReason: cmd.failureReason,
           });
         }
       }

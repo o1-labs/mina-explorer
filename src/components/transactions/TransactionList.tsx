@@ -30,6 +30,14 @@ function TypeBadge({ type }: { type: string }): ReactNode {
   );
 }
 
+function FailedBadge(): ReactNode {
+  return (
+    <span className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
+      Failed
+    </span>
+  );
+}
+
 export function TransactionList({
   transactions,
   loading,
@@ -77,7 +85,10 @@ export function TransactionList({
               className="transition-colors hover:bg-accent/50"
             >
               <td className="px-4 py-3">
-                <TypeBadge type={tx.type} />
+                <div className="flex items-center gap-1.5">
+                  <TypeBadge type={tx.type} />
+                  {tx.failureReason && <FailedBadge />}
+                </div>
               </td>
               <td className="px-4 py-3">
                 <HashLink hash={tx.hash} type="transaction" />
@@ -94,7 +105,12 @@ export function TransactionList({
               </td>
               <td className="px-4 py-3 text-right">
                 {tx.amount ? (
-                  <Amount value={tx.amount} />
+                  <Amount
+                    value={tx.amount}
+                    className={cn(
+                      tx.failureReason && 'text-muted-foreground line-through',
+                    )}
+                  />
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}

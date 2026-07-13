@@ -123,6 +123,7 @@ function TransactionDetail({
 
   const isUserCommand = transaction.type === 'user_command';
   const isPending = transaction.status === 'pending';
+  const isFailed = !!transaction.failureReason;
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -132,12 +133,14 @@ function TransactionDetail({
           <span
             className={cn(
               'rounded-full px-2 py-0.5 text-xs font-medium',
-              isPending
-                ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                : 'bg-green-500/10 text-green-600 dark:text-green-400',
+              isFailed
+                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                : isPending
+                  ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                  : 'bg-green-500/10 text-green-600 dark:text-green-400',
             )}
           >
-            {isPending ? 'Pending' : 'Confirmed'}
+            {isFailed ? 'Failed' : isPending ? 'Pending' : 'Confirmed'}
           </span>
           <span
             className={cn(

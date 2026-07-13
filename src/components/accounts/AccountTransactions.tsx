@@ -62,6 +62,14 @@ interface TransactionRowProps {
   tx: AccountTransaction;
 }
 
+function FailedBadge(): ReactNode {
+  return (
+    <span className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
+      Failed
+    </span>
+  );
+}
+
 function TransactionRow({ tx }: TransactionRowProps): ReactNode {
   const getIcon = (): ReactNode => {
     if (tx.type === 'zkapp') {
@@ -109,6 +117,7 @@ function TransactionRow({ tx }: TransactionRowProps): ReactNode {
           >
             {getTypeLabel()}
           </span>
+          {tx.failureReason && <FailedBadge />}
           <Link
             to={`/transaction/${tx.hash}`}
             className="truncate font-mono text-xs text-muted-foreground hover:text-primary"
@@ -139,13 +148,17 @@ function TransactionRow({ tx }: TransactionRowProps): ReactNode {
           <div
             className={cn(
               'font-mono',
-              tx.type === 'sent' ? 'text-red-600 dark:text-red-400' : '',
-              tx.type === 'received'
-                ? 'text-green-600 dark:text-green-400'
-                : '',
+              tx.failureReason
+                ? 'text-muted-foreground line-through'
+                : tx.type === 'sent'
+                  ? 'text-red-600 dark:text-red-400'
+                  : tx.type === 'received'
+                    ? 'text-green-600 dark:text-green-400'
+                    : '',
             )}
           >
-            {tx.type === 'sent' ? '-' : tx.type === 'received' ? '+' : ''}
+            {!tx.failureReason &&
+              (tx.type === 'sent' ? '-' : tx.type === 'received' ? '+' : '')}
             <Amount value={tx.amount} />
           </div>
         )}
