@@ -1,4 +1,4 @@
-import { test, expect, FIXTURES } from './fixtures';
+import { test, expect, FIXTURES, isMocked } from './fixtures';
 
 /**
  * Regression tests for #67 — a failed on-chain transaction (funds did not
@@ -71,6 +71,14 @@ async function mockFailedTx(
 }
 
 test.describe('Transaction status (#67)', () => {
+  // These tests inject a synthetic failed transaction and rely on the mock
+  // harness (fixtures' setupApiMocks) for every other request. Off-CI without
+  // MOCK_API the harness is inactive and route.fallback() would hit live
+  // endpoints, so skip rather than run a flaky live/mock hybrid.
+  test.beforeEach(() => {
+    test.skip(!isMocked, 'requires the mock harness (CI or MOCK_API=true)');
+  });
+
   test('a failed transaction shows "Failed", not "Confirmed"', async ({
     page,
   }) => {
@@ -85,7 +93,9 @@ test.describe('Transaction status (#67)', () => {
     await expect(page.locator('h2')).toContainText('Transaction Details', {
       timeout: 20000,
     });
-    await expect(page.getByText('Failed').first()).toBeVisible();
+    await expect(
+      page.getByText('Failed', { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText('Confirmed')).toHaveCount(0);
     await expect(page.getByText(REASON)).toBeVisible();
   });
@@ -104,9 +114,11 @@ test.describe('Transaction status (#67)', () => {
     await page.goto(`/#/account/${FIXTURES.accounts.blockProducer}`);
 
     // The failure is surfaced...
-    await expect(page.getByText('Failed').first()).toBeVisible({
-      timeout: 20000,
-    });
+    await expect(page.getByText('Failed', { exact: true }).first()).toBeVisible(
+      {
+        timeout: 20000,
+      },
+    );
     // ...and the amount is struck through, not a normal "+received" figure.
     await expect(
       page.locator('.line-through').filter({ hasText: 'MINA' }).first(),
@@ -125,9 +137,11 @@ test.describe('Transaction status (#67)', () => {
     // /transactions opens on the Confirmed tab, which renders TransactionList.
     await page.goto('/#/transactions');
 
-    await expect(page.getByText('Failed').first()).toBeVisible({
-      timeout: 20000,
-    });
+    await expect(page.getByText('Failed', { exact: true }).first()).toBeVisible(
+      {
+        timeout: 20000,
+      },
+    );
     await expect(
       page.locator('.line-through').filter({ hasText: 'MINA' }).first(),
     ).toBeVisible();

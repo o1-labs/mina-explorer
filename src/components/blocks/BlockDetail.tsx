@@ -4,6 +4,7 @@ import {
   Amount,
   LoadingSpinner,
   CopyButton,
+  FailedBadge,
 } from '@/components/common';
 import {
   formatDateTime,
@@ -358,9 +359,7 @@ function ZkAppCommandsTable({ commands }: ZkAppCommandsTableProps): ReactNode {
               </td>
               <td className="py-3">
                 {cmd.failureReason && cmd.failureReason.length > 0 ? (
-                  <span className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
-                    Failed
-                  </span>
+                  <FailedBadge />
                 ) : (
                   <span className="rounded bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
                     Applied

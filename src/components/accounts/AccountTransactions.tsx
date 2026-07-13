@@ -2,7 +2,12 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, ArrowDownLeft, Sparkles } from 'lucide-react';
 import { useAccountTransactions } from '@/hooks';
-import { HashLink, Amount, LoadingSpinner } from '@/components/common';
+import {
+  HashLink,
+  Amount,
+  LoadingSpinner,
+  FailedBadge,
+} from '@/components/common';
 import { formatNumber, formatTimeAgo, decodeMemo } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import type { AccountTransaction } from '@/services/api/transactions';
@@ -60,14 +65,6 @@ export function AccountTransactions({
 
 interface TransactionRowProps {
   tx: AccountTransaction;
-}
-
-function FailedBadge(): ReactNode {
-  return (
-    <span className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
-      Failed
-    </span>
-  );
 }
 
 function TransactionRow({ tx }: TransactionRowProps): ReactNode {

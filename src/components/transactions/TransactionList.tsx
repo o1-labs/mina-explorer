@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { HashLink, TimeAgo, Amount, LoadingSpinner } from '@/components/common';
+import {
+  HashLink,
+  TimeAgo,
+  Amount,
+  LoadingSpinner,
+  FailedBadge,
+} from '@/components/common';
 import { formatNumber } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import type { ConfirmedTransaction } from '@/services/api/transactions';
@@ -26,14 +32,6 @@ function TypeBadge({ type }: { type: string }): ReactNode {
       )}
     >
       {type}
-    </span>
-  );
-}
-
-function FailedBadge(): ReactNode {
-  return (
-    <span className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
-      Failed
     </span>
   );
 }
