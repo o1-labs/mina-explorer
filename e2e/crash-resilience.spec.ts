@@ -38,23 +38,22 @@ test.describe('Crash resilience (#65)', () => {
   test('a page render error shows a recoverable card, not a blank app', async ({
     page,
   }) => {
-    // Return an account whose balance passes the service-layer mapping but is
-    // non-numeric, so it only throws while *rendering* (formatMina -> BigInt).
-    // Without a boundary this blanks the whole SPA; with one, only the page
-    // area shows a fallback and the header stays usable.
-    // NOTE: this trigger relies on formatMina throwing on non-numeric input;
-    // when #69 makes formatMina input-safe, swap in another render-time throw.
+    // Return an account whose zkappState is a non-array. The service mapping
+    // passes it through verbatim (accounts.ts:183), then AccountDetail calls
+    // .map() on it during render and throws. This is independent of formatMina,
+    // so hardening formatMina (#69) won't quietly defuse this boundary test.
+    // Keyed on variables.publicKey, matching the mock's own discrimination.
     await page.route('**/*plain*.gcp.o1test.net/graphql', async route => {
-      let query = '';
+      let publicKey = '';
       try {
-        query = JSON.parse(route.request().postData() || '{}').query || '';
+        const body = JSON.parse(route.request().postData() || '{}');
+        publicKey = body.variables?.publicKey || '';
       } catch {
-        query = '';
+        publicKey = '';
       }
-      // Match the account lookup (requests balance), not bestChain/epoch.
-      if (query.includes('account') && query.includes('balance')) {
+      if (publicKey === FIXTURES.accounts.blockProducer) {
         const broken = JSON.parse(JSON.stringify(accountFixture));
-        broken.data.account.balance.total = 'NOT_A_NUMBER';
+        broken.data.account.zkappState = 'CRASH';
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
