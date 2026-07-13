@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { HashLink, TimeAgo, Amount, LoadingSpinner } from '@/components/common';
+import {
+  HashLink,
+  TimeAgo,
+  Amount,
+  LoadingSpinner,
+  FailedBadge,
+} from '@/components/common';
 import { formatNumber } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import type { ConfirmedTransaction } from '@/services/api/transactions';
@@ -77,7 +83,10 @@ export function TransactionList({
               className="transition-colors hover:bg-accent/50"
             >
               <td className="px-4 py-3">
-                <TypeBadge type={tx.type} />
+                <div className="flex items-center gap-1.5">
+                  <TypeBadge type={tx.type} />
+                  {tx.failureReason && <FailedBadge />}
+                </div>
               </td>
               <td className="px-4 py-3">
                 <HashLink hash={tx.hash} type="transaction" />
@@ -94,7 +103,12 @@ export function TransactionList({
               </td>
               <td className="px-4 py-3 text-right">
                 {tx.amount ? (
-                  <Amount value={tx.amount} />
+                  <Amount
+                    value={tx.amount}
+                    className={cn(
+                      tx.failureReason && 'text-muted-foreground line-through',
+                    )}
+                  />
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}

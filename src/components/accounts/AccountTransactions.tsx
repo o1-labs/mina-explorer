@@ -2,7 +2,12 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, ArrowDownLeft, Sparkles } from 'lucide-react';
 import { useAccountTransactions } from '@/hooks';
-import { HashLink, Amount, LoadingSpinner } from '@/components/common';
+import {
+  HashLink,
+  Amount,
+  LoadingSpinner,
+  FailedBadge,
+} from '@/components/common';
 import { formatNumber, formatTimeAgo, decodeMemo } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import type { AccountTransaction } from '@/services/api/transactions';
@@ -109,6 +114,7 @@ function TransactionRow({ tx }: TransactionRowProps): ReactNode {
           >
             {getTypeLabel()}
           </span>
+          {tx.failureReason && <FailedBadge />}
           <Link
             to={`/transaction/${tx.hash}`}
             className="truncate font-mono text-xs text-muted-foreground hover:text-primary"
@@ -139,13 +145,17 @@ function TransactionRow({ tx }: TransactionRowProps): ReactNode {
           <div
             className={cn(
               'font-mono',
-              tx.type === 'sent' ? 'text-red-600 dark:text-red-400' : '',
-              tx.type === 'received'
-                ? 'text-green-600 dark:text-green-400'
-                : '',
+              tx.failureReason
+                ? 'text-muted-foreground line-through'
+                : tx.type === 'sent'
+                  ? 'text-red-600 dark:text-red-400'
+                  : tx.type === 'received'
+                    ? 'text-green-600 dark:text-green-400'
+                    : '',
             )}
           >
-            {tx.type === 'sent' ? '-' : tx.type === 'received' ? '+' : ''}
+            {!tx.failureReason &&
+              (tx.type === 'sent' ? '-' : tx.type === 'received' ? '+' : '')}
             <Amount value={tx.amount} />
           </div>
         )}
