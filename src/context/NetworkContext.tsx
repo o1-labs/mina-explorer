@@ -10,6 +10,7 @@ import {
   NETWORKS,
   DEFAULT_NETWORK,
   resolveActiveNetworkId,
+  CUSTOM_ENDPOINT_KEY,
   type NetworkConfig,
 } from '@/config';
 import { initClient, getClient } from '@/services/api';
@@ -19,7 +20,6 @@ import {
   removeStoredItem,
 } from '@/lib/safeStorage';
 
-const CUSTOM_ENDPOINT_KEY = 'mina-explorer-custom-endpoint';
 const NETWORK_KEY = 'mina-explorer-network';
 const NETWORK_PARAM = 'network';
 

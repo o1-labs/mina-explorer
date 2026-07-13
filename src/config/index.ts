@@ -12,4 +12,6 @@ export type { NetworkConfig, ExplorerLink } from './networks';
 export {
   getActiveNetworkIdFromHash,
   resolveActiveNetworkId,
+  getActiveCustomEndpoint,
+  CUSTOM_ENDPOINT_KEY,
 } from './activeNetwork';
