@@ -13,6 +13,11 @@ import {
   type NetworkConfig,
 } from '@/config';
 import { initClient, getClient } from '@/services/api';
+import {
+  getStoredItem,
+  setStoredItem,
+  removeStoredItem,
+} from '@/lib/safeStorage';
 
 const CUSTOM_ENDPOINT_KEY = 'mina-explorer-custom-endpoint';
 const NETWORK_KEY = 'mina-explorer-network';
@@ -42,10 +47,10 @@ function getInitialEndpoint(): {
   customEndpoint: string | null;
 } {
   // Custom endpoint always wins — it's an explicit local override.
-  const savedCustom = localStorage.getItem(CUSTOM_ENDPOINT_KEY);
+  const savedCustom = getStoredItem(CUSTOM_ENDPOINT_KEY);
   if (savedCustom) {
     if (!isValidEndpointUrl(savedCustom)) {
-      localStorage.removeItem(CUSTOM_ENDPOINT_KEY);
+      removeStoredItem(CUSTOM_ENDPOINT_KEY);
     } else {
       return {
         network: {
@@ -126,8 +131,8 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
     if (newNetwork) {
       setNetworkState(newNetwork);
       setCustomEndpointState(null);
-      localStorage.removeItem(CUSTOM_ENDPOINT_KEY);
-      localStorage.setItem(NETWORK_KEY, networkId);
+      removeStoredItem(CUSTOM_ENDPOINT_KEY);
+      setStoredItem(NETWORK_KEY, networkId);
       getClient().setEndpoint(newNetwork.archiveEndpoint);
       const next = new URLSearchParams(searchParams);
       next.set(NETWORK_PARAM, networkId);
@@ -148,7 +153,7 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
       };
       setNetworkState(customNetwork);
       setCustomEndpointState(endpoint);
-      localStorage.setItem(CUSTOM_ENDPOINT_KEY, endpoint);
+      setStoredItem(CUSTOM_ENDPOINT_KEY, endpoint);
       getClient().setEndpoint(endpoint);
       // Drop any stale `network` param — it doesn't apply to custom endpoints.
       const next = new URLSearchParams(searchParams);
@@ -156,7 +161,7 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
       setSearchParams(next, { replace: true });
     } else {
       setCustomEndpointState(null);
-      localStorage.removeItem(CUSTOM_ENDPOINT_KEY);
+      removeStoredItem(CUSTOM_ENDPOINT_KEY);
       setNetwork(DEFAULT_NETWORK);
     }
   };

@@ -6,6 +6,8 @@
 // - Current price: GET https://api.coingecko.com/api/v3/simple/price?ids=mina-protocol&vs_currencies=usd,eur&include_24hr_change=true
 // - Historical price: GET https://api.coingecko.com/api/v3/coins/mina-protocol/history?date=DD-MM-YYYY
 
+import { getStoredItem, setStoredItem } from '@/lib/safeStorage';
+
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
 const MINA_COIN_ID = 'mina-protocol';
 
@@ -40,7 +42,7 @@ const HISTORICAL_PRICE_STORAGE_KEY = 'mina_price_historical';
 function loadCacheFromStorage(): void {
   try {
     // Load current price from localStorage
-    const storedCurrent = localStorage.getItem(CURRENT_PRICE_STORAGE_KEY);
+    const storedCurrent = getStoredItem(CURRENT_PRICE_STORAGE_KEY);
     if (storedCurrent) {
       const parsed = JSON.parse(storedCurrent) as MINAPrice;
       if (Date.now() - parsed.lastUpdated < CURRENT_PRICE_CACHE_DURATION) {
@@ -49,7 +51,7 @@ function loadCacheFromStorage(): void {
     }
 
     // Load historical prices from localStorage
-    const storedHistorical = localStorage.getItem(HISTORICAL_PRICE_STORAGE_KEY);
+    const storedHistorical = getStoredItem(HISTORICAL_PRICE_STORAGE_KEY);
     if (storedHistorical) {
       const parsed = JSON.parse(storedHistorical) as Record<
         string,
@@ -67,7 +69,7 @@ function loadCacheFromStorage(): void {
 function saveCacheToStorage(): void {
   try {
     if (currentPriceCache) {
-      localStorage.setItem(
+      setStoredItem(
         CURRENT_PRICE_STORAGE_KEY,
         JSON.stringify(currentPriceCache),
       );
@@ -78,7 +80,7 @@ function saveCacheToStorage(): void {
       historicalPriceCache.forEach((value, key) => {
         obj[key] = value;
       });
-      localStorage.setItem(HISTORICAL_PRICE_STORAGE_KEY, JSON.stringify(obj));
+      setStoredItem(HISTORICAL_PRICE_STORAGE_KEY, JSON.stringify(obj));
     }
   } catch {
     // Ignore storage errors

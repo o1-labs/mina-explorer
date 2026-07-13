@@ -1,4 +1,5 @@
 export { Layout } from './Layout';
+export { ErrorBoundary } from './ErrorBoundary';
 export { Header } from './Header';
 export { Footer } from './Footer';
 export { Disclaimer } from './Disclaimer';

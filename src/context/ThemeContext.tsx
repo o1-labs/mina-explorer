@@ -5,6 +5,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
+import { getStoredItem, setStoredItem } from '@/lib/safeStorage';
 
 type Theme = 'light' | 'dark';
 
@@ -20,7 +21,7 @@ const THEME_KEY = 'mina-explorer-theme';
 
 function getInitialTheme(): Theme {
   // Check localStorage first
-  const saved = localStorage.getItem(THEME_KEY);
+  const saved = getStoredItem(THEME_KEY);
   if (saved === 'light' || saved === 'dark') {
     return saved;
   }
@@ -49,7 +50,7 @@ export function ThemeProvider({ children }: ThemeProviderProps): ReactNode {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem(THEME_KEY, theme);
+    setStoredItem(THEME_KEY, theme);
   }, [theme]);
 
   const toggleTheme = (): void => {

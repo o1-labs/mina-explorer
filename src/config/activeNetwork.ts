@@ -1,4 +1,5 @@
 import { NETWORKS, DEFAULT_NETWORK } from './networks';
+import { getStoredItem } from '@/lib/safeStorage';
 
 const NETWORK_KEY = 'mina-explorer-network';
 const NETWORK_PARAM = 'network';
@@ -35,10 +36,8 @@ export function resolveActiveNetworkId(): string {
   const fromUrl = getActiveNetworkIdFromHash();
   if (fromUrl) return fromUrl;
 
-  if (typeof window !== 'undefined') {
-    const saved = window.localStorage.getItem(NETWORK_KEY);
-    if (saved && NETWORKS[saved]) return saved;
-  }
+  const saved = getStoredItem(NETWORK_KEY);
+  if (saved && NETWORKS[saved]) return saved;
 
   return DEFAULT_NETWORK;
 }

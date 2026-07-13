@@ -1,10 +1,11 @@
 import { type ReactNode, useState } from 'react';
+import { getStoredItem, setStoredItem } from '@/lib/safeStorage';
 
 const DISMISSED_KEY = 'mina-explorer-disclaimer-dismissed';
 
 export function Disclaimer(): ReactNode {
   const [dismissed, setDismissed] = useState(
-    () => localStorage.getItem(DISMISSED_KEY) === 'true',
+    () => getStoredItem(DISMISSED_KEY) === 'true',
   );
 
   if (dismissed) return null;
@@ -43,7 +44,7 @@ export function Disclaimer(): ReactNode {
         </div>
         <button
           onClick={() => {
-            localStorage.setItem(DISMISSED_KEY, 'true');
+            setStoredItem(DISMISSED_KEY, 'true');
             setDismissed(true);
           }}
           className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
