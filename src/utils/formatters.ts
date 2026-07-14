@@ -1,14 +1,56 @@
 const MINA_DECIMALS = 9;
-const NANOMINA_PER_MINA = 10 ** MINA_DECIMALS;
+const NANOMINA_PER_MINA = 10n ** BigInt(MINA_DECIMALS);
 
-export function formatMina(nanomina: string | number): string {
-  const amount =
-    typeof nanomina === 'string' ? BigInt(nanomina) : BigInt(nanomina);
-  const mina = Number(amount) / NANOMINA_PER_MINA;
-  return mina.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 9,
-  });
+/** Shown when an amount is missing or not a valid integer nanomina value. */
+const AMOUNT_PLACEHOLDER = '—';
+
+/**
+ * Parse a nanomina value (integer string, integer number, or bigint) into a
+ * BigInt. Returns null for null/undefined/non-integer/non-numeric input so
+ * callers can render a placeholder instead of throwing.
+ */
+export function parseNanomina(
+  value: string | number | bigint | null | undefined,
+): bigint | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'bigint') return value;
+  try {
+    if (typeof value === 'number') {
+      return Number.isInteger(value) ? BigInt(value) : null;
+    }
+    const trimmed = value.trim();
+    return /^-?\d+$/.test(trimmed) ? BigInt(trimmed) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format a nanomina amount as a grouped MINA string with 2–9 decimals. Uses
+ * BigInt end-to-end so large balances keep full precision — a plain Number
+ * loses precision above 2^53 nanomina (~9.007M MINA). Returns a placeholder
+ * for null/undefined/non-integer/non-numeric input instead of throwing.
+ *
+ * Grouping is pinned to en-US (canonical for a blockchain explorer): this keeps
+ * the thousands separator from colliding with the '.' decimal and makes the
+ * output deterministic regardless of the runtime locale.
+ */
+export function formatMina(
+  nanomina: string | number | null | undefined,
+): string {
+  const amount = parseNanomina(nanomina);
+  if (amount === null) return AMOUNT_PLACEHOLDER;
+
+  const negative = amount < 0n;
+  const abs = negative ? -amount : amount;
+  const whole = abs / NANOMINA_PER_MINA;
+  const frac = abs % NANOMINA_PER_MINA;
+
+  // Fractional part: 9 digits, drop trailing zeros but always keep >= 2.
+  let fracStr = frac.toString().padStart(MINA_DECIMALS, '0').replace(/0+$/, '');
+  if (fracStr.length < 2) fracStr = fracStr.padEnd(2, '0');
+
+  return `${negative ? '-' : ''}${whole.toLocaleString('en-US')}.${fracStr}`;
 }
 
 export function formatHash(hash: string, prefixLength: number = 8): string {
