@@ -30,6 +30,10 @@ export function parseNanomina(
  * BigInt end-to-end so large balances keep full precision — a plain Number
  * loses precision above 2^53 nanomina (~9.007M MINA). Returns a placeholder
  * for null/undefined/non-integer/non-numeric input instead of throwing.
+ *
+ * Grouping is pinned to en-US (canonical for a blockchain explorer): this keeps
+ * the thousands separator from colliding with the '.' decimal and makes the
+ * output deterministic regardless of the runtime locale.
  */
 export function formatMina(
   nanomina: string | number | null | undefined,
@@ -46,7 +50,7 @@ export function formatMina(
   let fracStr = frac.toString().padStart(MINA_DECIMALS, '0').replace(/0+$/, '');
   if (fracStr.length < 2) fracStr = fracStr.padEnd(2, '0');
 
-  return `${negative ? '-' : ''}${whole.toLocaleString()}.${fracStr}`;
+  return `${negative ? '-' : ''}${whole.toLocaleString('en-US')}.${fracStr}`;
 }
 
 export function formatHash(hash: string, prefixLength: number = 8): string {
