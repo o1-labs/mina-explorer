@@ -128,6 +128,7 @@ function base58Decode(input: string): Uint8Array | null {
 const MEMO_ENCODED_LENGTH = 39;
 const MEMO_VERSION_BYTE = 0x14;
 const MEMO_TEXT_TAG = 0x01;
+const MEMO_DATA_LENGTH = 32;
 
 /**
  * Decode a Mina transaction memo to its text. Returns '' for the empty memo or
@@ -152,12 +153,13 @@ export function decodeMemo(memo: string): string {
 
   const payload = decoded.subarray(1, decoded.length - 4); // drop version + checksum
   const tag = payload[0];
-  const length = payload[1];
+  const length = Math.min(payload[1], MEMO_DATA_LENGTH); // data is at most 32 bytes
   if (tag !== MEMO_TEXT_TAG || length === 0) return '';
 
-  const text = new TextDecoder().decode(payload.subarray(2, 2 + length));
-  // Defensive: drop any stray control characters.
-  return text.replace(/[\x00-\x1f\x7f]/g, '').trim();
+  // Drop NUL bytes only (never part of a real text memo); keep everything else
+  // — including spaces and newlines — verbatim.
+  const dataBytes = payload.subarray(2, 2 + length).filter(byte => byte !== 0);
+  return new TextDecoder().decode(dataBytes);
 }
 
 export function isValidPublicKey(key: string): boolean {

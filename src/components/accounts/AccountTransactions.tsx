@@ -96,6 +96,8 @@ function TransactionRow({ tx }: TransactionRowProps): ReactNode {
     return tx.kind || 'Received';
   };
 
+  const memoText = tx.memo ? decodeMemo(tx.memo) : '';
+
   return (
     <div className="flex items-center gap-4 px-6 py-4">
       {getIcon()}
@@ -132,10 +134,8 @@ function TransactionRow({ tx }: TransactionRowProps): ReactNode {
               <HashLink hash={tx.counterparty} type="account" />
             </>
           )}
-          {tx.memo && decodeMemo(tx.memo) && (
-            <span className="truncate text-muted-foreground">
-              · {decodeMemo(tx.memo)}
-            </span>
+          {memoText && (
+            <span className="truncate text-muted-foreground">· {memoText}</span>
           )}
         </div>
       </div>
