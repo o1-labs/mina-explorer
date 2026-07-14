@@ -98,23 +98,66 @@ export function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
+const BASE58_ALPHABET =
+  '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+/** Decode a base58 string to bytes, or null if it has invalid characters. */
+function base58Decode(input: string): Uint8Array | null {
+  let num = 0n;
+  for (const ch of input) {
+    const idx = BASE58_ALPHABET.indexOf(ch);
+    if (idx < 0) return null;
+    num = num * 58n + BigInt(idx);
+  }
+  const bytes: number[] = [];
+  while (num > 0n) {
+    bytes.unshift(Number(num & 0xffn));
+    num >>= 8n;
+  }
+  // Leading '1' characters encode leading zero bytes.
+  for (const ch of input) {
+    if (ch === '1') bytes.unshift(0);
+    else break;
+  }
+  return Uint8Array.from(bytes);
+}
+
+// Mina memos are base58check-encoded: a 1-byte version (0x14), a 34-byte memo
+// [tag, length, ...32 data bytes], then a 4-byte checksum — 39 bytes in all. A
+// text memo has tag 0x01; the text is the first `length` data bytes as UTF-8.
+const MEMO_ENCODED_LENGTH = 39;
+const MEMO_VERSION_BYTE = 0x14;
+const MEMO_TEXT_TAG = 0x01;
+
+/**
+ * Decode a Mina transaction memo to its text. Returns '' for the empty memo or
+ * anything that isn't a decodable text memo — the previous base64 (`atob`)
+ * implementation rendered every real base58check memo as a garbage blob.
+ *
+ * The 4-byte checksum is stripped but not verified: memos come from the chain
+ * (already well-formed) and this runs during render, so the structural checks
+ * (39 bytes, version 0x14, tag 0x01) are enough without a synchronous SHA-256.
+ */
 export function decodeMemo(memo: string): string {
+  if (!memo) return '';
+
+  const decoded = base58Decode(memo);
   if (
-    !memo ||
-    memo === 'E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4TVDDpTTSsv8mK6YaH'
+    !decoded ||
+    decoded.length !== MEMO_ENCODED_LENGTH ||
+    decoded[0] !== MEMO_VERSION_BYTE
   ) {
     return '';
   }
 
-  try {
-    // Mina memos are base58 encoded
-    // The default empty memo has a specific hash
-    const decoded = atob(memo);
-    // Remove null bytes and control characters
-    return decoded.replace(/[\x00-\x1F\x7F]/g, '').trim();
-  } catch {
-    return memo;
-  }
+  const payload = decoded.subarray(1, decoded.length - 4); // drop version + checksum
+  const tag = payload[0];
+  const length = payload[1];
+  if (tag !== MEMO_TEXT_TAG || length === 0) return '';
+
+  const text = new TextDecoder().decode(payload.subarray(2, 2 + length));
+  // Defensive: drop any stray control characters.
+  return text.replace(/[\x00-\x1f\x7f]/g, '').trim();
 }
 
 export function isValidPublicKey(key: string): boolean {
