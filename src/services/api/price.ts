@@ -7,6 +7,7 @@
 // - Historical price: GET https://api.coingecko.com/api/v3/coins/mina-protocol/history?date=DD-MM-YYYY
 
 import { getStoredItem, setStoredItem } from '@/lib/safeStorage';
+import { parseNanomina } from '@/utils/formatters';
 
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
 const MINA_COIN_ID = 'mina-protocol';
@@ -214,14 +215,16 @@ export async function fetchHistoricalPrice(
  * @param priceEur Price of 1 MINA in EUR
  */
 export function convertToFiat(
-  minaAmount: string | bigint,
+  minaAmount: string | bigint | number | null | undefined,
   priceUsd: number,
   priceEur: number,
 ): { usd: number; eur: number } {
-  const nanomina =
-    typeof minaAmount === 'string' ? BigInt(minaAmount) : minaAmount;
-  const mina = Number(nanomina) / 1e9;
+  const nanomina = parseNanomina(minaAmount);
+  if (nanomina === null) return { usd: 0, eur: 0 };
 
+  // Fiat is inherently approximate (float price, rounded to cents), so a
+  // Number here is fine; the exact-integer path lives in formatMina.
+  const mina = Number(nanomina) / 1e9;
   return {
     usd: mina * priceUsd,
     eur: mina * priceEur,
