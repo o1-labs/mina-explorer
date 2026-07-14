@@ -855,20 +855,30 @@ interface HashSearchResponse {
   blocks: Array<{ blockHeight: number; stateHash: string }>;
 }
 
+// The archive can't filter blocks by state hash (BlockQueryInput exposes only
+// height/date/canonical filters — verified against the live endpoint), so a
+// hash lookup scans recent blocks in chunks. BLOCK_HASH_SEARCH_WINDOW is how far
+// back (in blocks) a hash stays reachable before the scan gives up; the UI uses
+// it to explain that an older, un-found hash may still be a real block.
+const BLOCK_HASH_SEARCH_CHUNK = 500;
+const BLOCK_HASH_SEARCH_MAX_CHUNKS = 10;
+export const BLOCK_HASH_SEARCH_WINDOW =
+  BLOCK_HASH_SEARCH_CHUNK * BLOCK_HASH_SEARCH_MAX_CHUNKS;
+
 export async function fetchBlockByHash(
   stateHash: string,
 ): Promise<BlockDetail | null> {
   const client = getClient();
-  const CHUNK_SIZE = 500;
-  const MAX_CHUNKS = 10;
 
   let cursor: number | undefined;
 
-  for (let i = 0; i < MAX_CHUNKS; i++) {
+  for (let i = 0; i < BLOCK_HASH_SEARCH_MAX_CHUNKS; i++) {
     const query = cursor
       ? BLOCKS_HASH_SEARCH_QUERY_PAGINATED
       : BLOCKS_HASH_SEARCH_QUERY;
-    const variables: Record<string, unknown> = { limit: CHUNK_SIZE };
+    const variables: Record<string, unknown> = {
+      limit: BLOCK_HASH_SEARCH_CHUNK,
+    };
     if (cursor) {
       variables.maxBlockHeight = cursor;
     }
@@ -881,7 +891,7 @@ export async function fetchBlockByHash(
     }
 
     // No more blocks to search
-    if (data.blocks.length < CHUNK_SIZE) {
+    if (data.blocks.length < BLOCK_HASH_SEARCH_CHUNK) {
       break;
     }
 
