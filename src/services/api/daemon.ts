@@ -3,6 +3,7 @@ import {
   resolveActiveNetworkId,
   getActiveCustomEndpoint,
 } from '@/config';
+import { fetchWithTimeout } from './http';
 
 export function getDaemonEndpoint(): string {
   // A custom endpoint overrides the selected network for the daemon too, so
@@ -21,7 +22,7 @@ interface GraphQLResponse<T> {
 
 export async function queryDaemon<T>(query: string): Promise<T> {
   const endpoint = getDaemonEndpoint();
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query }),
@@ -50,7 +51,7 @@ export async function mutateDaemon<T>(
   variables: Record<string, unknown>,
 ): Promise<T> {
   const endpoint = getDaemonEndpoint();
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: mutation, variables }),

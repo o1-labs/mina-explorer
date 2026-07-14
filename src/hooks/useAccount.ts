@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchAccount } from '@/services/api/accounts';
 import { useNetwork } from './useNetwork';
+import { useRequestGeneration } from './useRequestGeneration';
 import type { Account } from '@/types';
 
 interface UseAccountResult {
@@ -15,6 +16,7 @@ export function useAccount(publicKey: string | undefined): UseAccountResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   const fetchData = async (): Promise<void> => {
     if (!publicKey) {
@@ -22,16 +24,21 @@ export function useAccount(publicKey: string | undefined): UseAccountResult {
       return;
     }
 
+    const token = gen.next();
     setLoading(true);
     setError(null);
 
     try {
       const data = await fetchAccount(publicKey);
-      setAccount(data);
+      if (gen.isCurrent(token)) setAccount(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch account');
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch account',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   };
 
