@@ -1,5 +1,6 @@
 import { getClient } from './client';
 import { queryDaemon, isDaemonUnavailableError } from './daemon';
+import { parseNanomina } from '@/utils/formatters';
 import type { BlockSummary, BlockDetail, NetworkState } from '@/types';
 
 // Full query with protocolState, networkState, and transaction counts
@@ -345,23 +346,26 @@ function mapApiBlockToSummary(
  * summary card always matches the per-transaction tables below it. Transaction
  * fees are the user-command fees plus the zkApp fee-payer fees; snark fees are
  * the standalone `Fee_transfer` entries (not `Fee_transfer_via_coinbase`).
- * BigInt throughout for exactness. See issue #70.
+ * BigInt throughout for exactness; parseNanomina tolerates a missing/malformed
+ * fee (treats it as 0) so one bad value can't abort the whole block fetch. See
+ * issue #70.
  */
 function computeBlockFees(transactions: BlockDetail['transactions']): {
   txFees: string;
   snarkFees: string;
 } {
   const userFees = (transactions.userCommands || []).reduce(
-    (sum, cmd) => sum + BigInt(cmd.fee || '0'),
-    BigInt(0),
+    (sum, cmd) => sum + (parseNanomina(cmd.fee) ?? 0n),
+    0n,
   );
   const zkappFees = (transactions.zkappCommands || []).reduce(
-    (sum, cmd) => sum + BigInt(cmd.zkappCommand?.feePayer?.body?.fee || '0'),
-    BigInt(0),
+    (sum, cmd) =>
+      sum + (parseNanomina(cmd.zkappCommand?.feePayer?.body?.fee) ?? 0n),
+    0n,
   );
   const snarkFees = (transactions.feeTransfer || [])
     .filter(ft => ft.type === 'Fee_transfer')
-    .reduce((sum, ft) => sum + BigInt(ft.fee || '0'), BigInt(0));
+    .reduce((sum, ft) => sum + (parseNanomina(ft.fee) ?? 0n), 0n);
 
   return {
     txFees: (userFees + zkappFees).toString(),

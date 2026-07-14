@@ -76,8 +76,10 @@ test.describe('block fees summary (#70)', () => {
     });
 
     // Daemon: supply the block's transactions with distinctive fees.
-    //   txFees   = 0.111 + 0.222            = 0.333 MINA
-    //   snarkFees = 0.055 (Fee_transfer only, coinbase transfer excluded)
+    //   txFees   = 0.111 + 0.222   = 0.333 MINA
+    //   snarkFees = 0.055 + 0.011  = 0.066 MINA (Fee_transfer only; the
+    //              Fee_transfer_via_coinbase entry is the coinbase payout, not a
+    //              snark fee, and must be excluded)
     await page.route(/graphql/, async route => {
       const q = getQuery(route.request().postData());
       if (!q.includes('block(height:')) {
@@ -123,6 +125,7 @@ test.describe('block fees summary (#70)', () => {
                 zkappCommands: [],
                 feeTransfer: [
                   { recipient: B62, fee: '55000000', type: 'Fee_transfer' },
+                  { recipient: B62, fee: '11000000', type: 'Fee_transfer' },
                   {
                     recipient: B62,
                     fee: '720000000000',
@@ -138,13 +141,22 @@ test.describe('block fees summary (#70)', () => {
 
     await page.goto(`/#/block/${HEIGHT}`);
 
-    // The summary must reflect the enriched tables, not 0.00. 0.333 is the sum
-    // of the two payment fees (0.111 + 0.222) — it appears only in the summary,
-    // never as an individual row — so seeing it proves the recompute ran.
+    // The summary must reflect the enriched tables, not 0.00. The SUMS 0.333
+    // (txFees) and 0.066 (snarkFees) appear only in the summary — never as an
+    // individual table row — so seeing them proves the recompute ran rather than
+    // just echoing a row value.
     await expect(page.getByText('Transaction Fees').first()).toBeVisible({
       timeout: 20000,
     });
-    await expect(page.getByText(/0\.333/).first()).toBeVisible();
+    await expect(page.getByText(/0\.333/).first()).toBeVisible(); // 0.111 + 0.222
+    await expect(page.getByText(/0\.066/).first()).toBeVisible(); // 0.055 + 0.011
+
+    // Summary == sum of the tables: the user tab (default) lists the two payment
+    // fees; the Fee Transfers tab lists the two snark fees.
+    await expect(page.getByText(/0\.111/).first()).toBeVisible();
+    await expect(page.getByText(/0\.222/).first()).toBeVisible();
+    await page.getByRole('button', { name: /Fee Transfers/ }).click();
     await expect(page.getByText(/0\.055/).first()).toBeVisible();
+    await expect(page.getByText(/0\.011/).first()).toBeVisible();
   });
 });
