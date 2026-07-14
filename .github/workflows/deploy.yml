@@ -34,10 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: '22'
           cache: 'npm'
@@ -52,15 +52,15 @@ jobs:
         run: npx vite build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: ./dist
 
       - name: Upload dist for release
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: dist
           path: dist
@@ -75,7 +75,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
 
   release:
     needs: [build, deploy]
@@ -88,7 +88,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.skip_release != true)
     steps:
       - name: Checkout (full history)
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
 
@@ -226,7 +226,7 @@ jobs:
       - name: AI narrative summary (free via GitHub Models)
         if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
         continue-on-error: true
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@a7805884c80886efc241e94a5351df715968a0ad # v2.1.1
         id: ai
         with:
           model: openai/gpt-4o-mini
@@ -254,7 +254,7 @@ jobs:
 
       - name: Download dist artifact
         if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: dist
           path: dist
@@ -291,13 +291,18 @@ jobs:
       # Path B: direct GitHub repo secret (fallback). Used if SLACK_BOT_TOKEN is set and Path A didn't run.
       # If neither secret is set, all Slack steps short-circuit and the release ships without notifying.
 
+      # SA-key scope (reviewed for #74): GCP_SLACK_TOKEN_SA_KEY authenticates only
+      # to read the single Secret Manager secret fetched below
+      # (o1labs-192920/slackGrafanaAlertsBotToken). The action is now SHA-pinned;
+      # the remaining hardening is to migrate this long-lived JSON key to Workload
+      # Identity Federation so no static credential is stored at all.
       - name: Authenticate to GCP (Path A)
         if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true' && env.GCP_SA_KEY != ''
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SLACK_TOKEN_SA_KEY }}
         id: gcp_auth
         continue-on-error: true
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           credentials_json: ${{ secrets.GCP_SLACK_TOKEN_SA_KEY }}
 
@@ -305,7 +310,7 @@ jobs:
         if: steps.gcp_auth.outcome == 'success'
         id: gcp_secret
         continue-on-error: true
-        uses: google-github-actions/get-secretmanager-secrets@v2
+        uses: google-github-actions/get-secretmanager-secrets@2b5f97c5a4b9c105e64646762ad4fc3f5128e6f5 # v2.2.5
         with:
           secrets: |-
             slack_bot_token:o1labs-192920/slackGrafanaAlertsBotToken
