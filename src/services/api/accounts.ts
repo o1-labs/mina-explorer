@@ -1,9 +1,5 @@
 import type { Account } from '@/types';
-import { NETWORKS, resolveActiveNetworkId } from '@/config';
-
-function getDaemonEndpoint(): string {
-  return NETWORKS[resolveActiveNetworkId()].daemonEndpoint;
-}
+import { getDaemonEndpoint } from './daemon';
 
 // Daemon GraphQL query for account data
 // Note: The daemon uses PublicKey scalar type, not String

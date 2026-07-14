@@ -1,7 +1,17 @@
-import { NETWORKS, resolveActiveNetworkId } from '@/config';
+import {
+  NETWORKS,
+  resolveActiveNetworkId,
+  getActiveCustomEndpoint,
+} from '@/config';
 
 export function getDaemonEndpoint(): string {
-  return NETWORKS[resolveActiveNetworkId()].daemonEndpoint;
+  // A custom endpoint overrides the selected network for the daemon too, so
+  // account/mempool reads and broadcasts hit the endpoint the user configured
+  // (not the previously selected public network).
+  return (
+    getActiveCustomEndpoint() ??
+    NETWORKS[resolveActiveNetworkId()].daemonEndpoint
+  );
 }
 
 interface GraphQLResponse<T> {
