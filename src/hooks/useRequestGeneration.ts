@@ -26,9 +26,12 @@ export interface RequestGeneration {
  */
 export function useRequestGeneration(): RequestGeneration {
   const counter = useRef(0);
-  const api = useRef<RequestGeneration>({
-    next: () => (counter.current += 1),
-    isCurrent: (token: number) => counter.current === token,
-  });
+  const api = useRef<RequestGeneration | null>(null);
+  if (api.current === null) {
+    api.current = {
+      next: () => (counter.current += 1),
+      isCurrent: (token: number) => counter.current === token,
+    };
+  }
   return api.current;
 }
