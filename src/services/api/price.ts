@@ -101,16 +101,21 @@ loadCacheFromStorage();
  * Fetch current MINA price in USD and EUR
  * Uses CoinGecko simple/price endpoint
  */
-export async function fetchCurrentPrice(): Promise<MINAPrice> {
-  // Serve a fresh cached price without touching the network.
+export async function fetchCurrentPrice(options?: {
+  forceRefresh?: boolean;
+}): Promise<MINAPrice> {
+  // Serve a fresh cached price without touching the network, unless the caller
+  // explicitly wants fresh data (e.g. the provider's scheduled refresh).
   if (
+    !options?.forceRefresh &&
     currentPriceCache &&
     Date.now() - currentPriceCache.lastUpdated < CURRENT_PRICE_CACHE_DURATION
   ) {
     return currentPriceCache;
   }
 
-  // Coalesce concurrent callers onto one network request.
+  // Coalesce concurrent callers onto one network request. A forced refresh
+  // still joins an in-flight request — it is already fetching fresh data.
   if (inFlightPriceRequest) {
     return inFlightPriceRequest;
   }

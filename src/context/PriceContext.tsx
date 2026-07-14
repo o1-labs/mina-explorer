@@ -17,8 +17,9 @@ interface PriceContextValue {
 
 const PriceContext = createContext<PriceContextValue | null>(null);
 
-// Auto-refresh interval (5 minutes). Kept equal to the price cache TTL in
-// price.ts so each scheduled refresh performs exactly one real network fetch.
+// How often the provider proactively refreshes the price (5 minutes). This is
+// independent of the price service's cache TTL: the scheduled refresh forces a
+// fresh fetch, while passive reads elsewhere are still served from the cache.
 const REFRESH_INTERVAL = 5 * 60 * 1000;
 
 interface PriceProviderProps {
@@ -38,34 +39,40 @@ export function PriceProvider({ children }: PriceProviderProps): ReactNode {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (): Promise<void> => {
-    try {
-      const data = await fetchCurrentPrice();
-      setPrice(data);
-      setError(null);
-    } catch (err) {
-      // Keep the last good price on error (stale data is better than none); the
-      // error only surfaces in the UI while there is no price to show.
-      console.warn('[Price] Failed to fetch MINA price:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch MINA price',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetchPrice = useCallback(
+    async (forceRefresh: boolean): Promise<void> => {
+      try {
+        const data = await fetchCurrentPrice({ forceRefresh });
+        setPrice(data);
+        setError(null);
+      } catch (err) {
+        // Keep the last good price on error (stale data is better than none);
+        // the error only surfaces in the UI while there is no price to show.
+        console.warn('[Price] Failed to fetch MINA price:', err);
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch MINA price',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    // Initial fetch plus a single auto-refresh timer for the whole app.
-    fetchData();
-    const interval = setInterval(fetchData, REFRESH_INTERVAL);
+    // One initial (cache-first) fetch plus a single timer that forces a fresh
+    // price on each tick — one fetch and one timer for the whole app.
+    void fetchPrice(false);
+    const interval = setInterval(() => void fetchPrice(true), REFRESH_INTERVAL);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchPrice]);
+
+  const refetch = useCallback((): void => {
+    void fetchPrice(true);
+  }, [fetchPrice]);
 
   return (
-    <PriceContext.Provider
-      value={{ price, loading, error, refetch: fetchData }}
-    >
+    <PriceContext.Provider value={{ price, loading, error, refetch }}>
       {children}
     </PriceContext.Provider>
   );
