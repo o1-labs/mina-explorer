@@ -6,6 +6,7 @@ import {
   type BlockProducersResult,
 } from '@/services/api/blocks';
 import { useNetwork } from './useNetwork';
+import { useRequestGeneration } from './useRequestGeneration';
 
 interface UseTopBlockProducersResult {
   producers: TopBlockProducer[];
@@ -22,20 +23,24 @@ export function useTopBlockProducers(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   const fetchData = async (): Promise<void> => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
 
     try {
       const data = await fetchTopBlockProducers(sampleSize, topN);
-      setProducers(data);
+      if (gen.isCurrent(token)) setProducers(data);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch top producers',
-      );
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch top producers',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -108,8 +113,10 @@ export function useBlockProducersByPeriod(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   const fetchData = async (): Promise<void> => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
 
@@ -121,15 +128,17 @@ export function useBlockProducersByPeriod(
 
       const { start, end } = option.getDateRange();
       const data = await fetchBlockProducersByDateRange(start, end, topN);
-      setResult(data);
+      if (gen.isCurrent(token)) setResult(data);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to fetch block producers for period',
-      );
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to fetch block producers for period',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   };
 

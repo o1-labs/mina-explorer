@@ -8,6 +8,7 @@ import {
 } from '@/services/api';
 import { fetchEpochInfo, type EpochInfo } from '@/services/api/daemon';
 import { useNetwork } from './useNetwork';
+import { useRequestGeneration } from './useRequestGeneration';
 import type { BlockSummary, BlockDetail, NetworkState } from '@/types';
 
 interface UseBlocksResult {
@@ -19,20 +20,24 @@ interface UseBlocksResult {
 
 export function useBlocks(limit: number = 25): UseBlocksResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadBlocks = useCallback(async () => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
     try {
       const data = await fetchBlocks(limit);
-      setBlocks(data);
+      if (gen.isCurrent(token)) setBlocks(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch blocks');
+      if (gen.isCurrent(token)) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch blocks');
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   }, [limit]);
 
@@ -52,12 +57,14 @@ interface UseBlockResult {
 
 export function useBlock(identifier: string | number): UseBlockResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [block, setBlock] = useState<BlockDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadBlock = async (): Promise<void> => {
+      const token = gen.next();
       setLoading(true);
       setError(null);
       try {
@@ -70,14 +77,20 @@ export function useBlock(identifier: string | number): UseBlockResult {
         } else {
           data = await fetchBlockByHash(String(identifier));
         }
-        setBlock(data);
-        if (!data) {
-          setError('Block not found');
+        if (gen.isCurrent(token)) {
+          setBlock(data);
+          if (!data) {
+            setError('Block not found');
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch block');
+        if (gen.isCurrent(token)) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to fetch block',
+          );
+        }
       } finally {
-        setLoading(false);
+        if (gen.isCurrent(token)) setLoading(false);
       }
     };
 
@@ -96,22 +109,26 @@ interface UseNetworkStateResult {
 
 export function useNetworkState(): UseNetworkStateResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [networkState, setNetworkState] = useState<NetworkState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadNetworkState = useCallback(async () => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
     try {
       const data = await fetchNetworkState();
-      setNetworkState(data);
+      if (gen.isCurrent(token)) setNetworkState(data);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch network state',
-      );
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch network state',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   }, []);
 
@@ -141,6 +158,7 @@ export function usePaginatedBlocks(
   pageSize: number = 25,
 ): UsePaginatedBlocksResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +170,7 @@ export function usePaginatedBlocks(
 
   const loadPage = useCallback(
     async (pageNum: number, forceRefresh: boolean = false) => {
+      const token = gen.next();
       setLoading(true);
       setError(null);
 
@@ -166,17 +185,23 @@ export function usePaginatedBlocks(
         }
 
         const data = await fetchBlocksPaginated(pageSize, cursor);
-        setBlocks(data.blocks);
-        setHasMore(data.hasMore);
+        if (gen.isCurrent(token)) {
+          setBlocks(data.blocks);
+          setHasMore(data.hasMore);
 
-        // Only update total on first load or refresh
-        if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
-          setTotalBlockHeight(data.totalBlockHeight);
+          // Only update total on first load or refresh
+          if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
+            setTotalBlockHeight(data.totalBlockHeight);
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch blocks');
+        if (gen.isCurrent(token)) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to fetch blocks',
+          );
+        }
       } finally {
-        setLoading(false);
+        if (gen.isCurrent(token)) setLoading(false);
       }
     },
     [pageSize, totalBlockHeight],
@@ -244,14 +269,20 @@ interface UseEpochInfoResult {
 
 export function useEpochInfo(): UseEpochInfoResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const token = gen.next();
     setLoading(true);
     fetchEpochInfo()
-      .then(data => setEpochInfo(data))
-      .finally(() => setLoading(false));
+      .then(data => {
+        if (gen.isCurrent(token)) setEpochInfo(data);
+      })
+      .finally(() => {
+        if (gen.isCurrent(token)) setLoading(false);
+      });
   }, [network.id]);
 
   return { epochInfo, loading };

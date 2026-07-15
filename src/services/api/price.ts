@@ -8,6 +8,7 @@
 
 import { getStoredItem, setStoredItem } from '@/lib/safeStorage';
 import { parseNanomina } from '@/utils/formatters';
+import { fetchWithTimeout } from './http';
 
 const COINGECKO_API_BASE = 'https://api.coingecko.com/api/v3';
 const MINA_COIN_ID = 'mina-protocol';
@@ -134,7 +135,7 @@ export async function fetchCurrentPrice(options?: {
 async function requestCurrentPrice(): Promise<MINAPrice> {
   const url = `${COINGECKO_API_BASE}/simple/price?ids=${MINA_COIN_ID}&vs_currencies=usd,eur&include_24hr_change=true`;
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch price: ${response.status}`);
   }
@@ -195,7 +196,7 @@ export async function fetchHistoricalPrice(
 
   const url = `${COINGECKO_API_BASE}/coins/${MINA_COIN_ID}/history?date=${dateStr}`;
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch historical price: ${response.status}`);
   }

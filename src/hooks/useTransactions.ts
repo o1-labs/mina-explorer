@@ -13,6 +13,7 @@ import {
   type ConfirmedTransaction,
 } from '@/services/api/transactions';
 import { useNetwork } from './useNetwork';
+import { useRequestGeneration } from './useRequestGeneration';
 
 interface UsePendingTransactionsResult {
   transactions: PendingTransaction[];
@@ -33,20 +34,24 @@ export function usePendingTransactions(): UsePendingTransactionsResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   const fetchData = async (): Promise<void> => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
 
     try {
       const data = await fetchPendingTransactions();
-      setTransactions(data);
+      if (gen.isCurrent(token)) setTransactions(data);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch transactions',
-      );
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch transactions',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -62,20 +67,24 @@ export function usePendingZkAppCommands(): UsePendingZkAppCommandsResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   const fetchData = async (): Promise<void> => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
 
     try {
       const data = await fetchPendingZkAppCommands();
-      setCommands(data);
+      if (gen.isCurrent(token)) setCommands(data);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch zkApp commands',
-      );
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch zkApp commands',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -99,6 +108,7 @@ export function useTransaction(hash: string): UseTransactionResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   useEffect(() => {
     if (!hash) {
@@ -108,21 +118,26 @@ export function useTransaction(hash: string): UseTransactionResult {
     }
 
     const fetchData = async (): Promise<void> => {
+      const token = gen.next();
       setLoading(true);
       setError(null);
 
       try {
         const data = await fetchTransactionByHash(hash);
-        if (!data) {
-          setError('Transaction not found');
+        if (gen.isCurrent(token)) {
+          if (!data) {
+            setError('Transaction not found');
+          }
+          setTransaction(data);
         }
-        setTransaction(data);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to fetch transaction',
-        );
+        if (gen.isCurrent(token)) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to fetch transaction',
+          );
+        }
       } finally {
-        setLoading(false);
+        if (gen.isCurrent(token)) setLoading(false);
       }
     };
 
@@ -145,6 +160,7 @@ export function useAccountTransactions(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   useEffect(() => {
     if (!publicKey) {
@@ -154,20 +170,23 @@ export function useAccountTransactions(
     }
 
     const fetchData = async (): Promise<void> => {
+      const token = gen.next();
       setLoading(true);
       setError(null);
 
       try {
         const data = await fetchAccountTransactions(publicKey);
-        setTransactions(data);
+        if (gen.isCurrent(token)) setTransactions(data);
       } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to fetch account transactions',
-        );
+        if (gen.isCurrent(token)) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to fetch account transactions',
+          );
+        }
       } finally {
-        setLoading(false);
+        if (gen.isCurrent(token)) setLoading(false);
       }
     };
 
@@ -199,6 +218,7 @@ export function useRecentTransactions(
   maxBlocks: number = 30,
 ): UseRecentTransactionsResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [allTransactions, setAllTransactions] = useState<
     ConfirmedTransaction[]
   >([]);
@@ -219,19 +239,24 @@ export function useRecentTransactions(
   }, [allTransactions, page]);
 
   const loadData = useCallback(async () => {
+    const token = gen.next();
     setLoading(true);
     setError(null);
 
     try {
       const data = await fetchRecentTransactions(maxBlocks);
-      setAllTransactions(data.transactions);
-      setBlocksScanned(data.blocksScanned);
+      if (gen.isCurrent(token)) {
+        setAllTransactions(data.transactions);
+        setBlocksScanned(data.blocksScanned);
+      }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch transactions',
-      );
+      if (gen.isCurrent(token)) {
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch transactions',
+        );
+      }
     } finally {
-      setLoading(false);
+      if (gen.isCurrent(token)) setLoading(false);
     }
   }, [maxBlocks]);
 
@@ -301,6 +326,7 @@ export function usePaginatedTransactions(
   blocksPerPage: number = 50,
 ): UsePaginatedTransactionsResult {
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
   const [transactions, setTransactions] = useState<ConfirmedTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -312,6 +338,7 @@ export function usePaginatedTransactions(
 
   const loadPage = useCallback(
     async (pageNum: number, forceRefresh: boolean = false) => {
+      const token = gen.next();
       setLoading(true);
       setError(null);
 
@@ -323,18 +350,22 @@ export function usePaginatedTransactions(
         }
 
         const data = await fetchTransactionsPaginated(blocksPerPage, cursor);
-        setTransactions(data.transactions);
-        setHasMore(data.hasMore);
+        if (gen.isCurrent(token)) {
+          setTransactions(data.transactions);
+          setHasMore(data.hasMore);
 
-        if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
-          setTotalBlockHeight(data.totalBlockHeight);
+          if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
+            setTotalBlockHeight(data.totalBlockHeight);
+          }
         }
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to fetch transactions',
-        );
+        if (gen.isCurrent(token)) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to fetch transactions',
+          );
+        }
       } finally {
-        setLoading(false);
+        if (gen.isCurrent(token)) setLoading(false);
       }
     },
     [blocksPerPage, totalBlockHeight],

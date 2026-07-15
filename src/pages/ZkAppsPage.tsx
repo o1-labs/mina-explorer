@@ -4,7 +4,7 @@ import { Sparkles, ExternalLink } from 'lucide-react';
 import { HashLink, LoadingSpinner } from '@/components/common';
 import { formatTimeAgo } from '@/utils/formatters';
 import { getClient } from '@/services/api/client';
-import { useNetwork } from '@/hooks';
+import { useNetwork, useRequestGeneration } from '@/hooks';
 
 interface ZkAppActivity {
   hash: string;
@@ -120,9 +120,11 @@ export function ZkAppsPage(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { network } = useNetwork();
+  const gen = useRequestGeneration();
 
   useEffect(() => {
     async function fetchZkAppActivity(): Promise<void> {
+      const token = gen.next();
       setLoading(true);
       setError(null);
 
@@ -188,12 +190,14 @@ export function ZkAppsPage(): ReactNode {
               );
               extractFlat(data);
             } catch {
-              setActivities([]);
-              setZkApps([]);
-              setError(
-                'zkApp data is not available on the current network endpoint. ' +
-                  'Try switching to a different network or endpoint that supports zkApp queries.',
-              );
+              if (gen.isCurrent(token)) {
+                setActivities([]);
+                setZkApps([]);
+                setError(
+                  'zkApp data is not available on the current network endpoint. ' +
+                    'Try switching to a different network or endpoint that supports zkApp queries.',
+                );
+              }
               return;
             }
           } else {
@@ -201,7 +205,9 @@ export function ZkAppsPage(): ReactNode {
           }
         }
 
-        setActivities(allActivities);
+        if (gen.isCurrent(token)) {
+          setActivities(allActivities);
+        }
 
         // Aggregate by zkApp account (affected accounts that aren't just fee payers)
         const zkAppMap = new Map<
@@ -243,13 +249,19 @@ export function ZkAppsPage(): ReactNode {
           )
           .slice(0, 50); // Top 50 most recently active
 
-        setZkApps(zkAppList);
+        if (gen.isCurrent(token)) {
+          setZkApps(zkAppList);
+        }
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to fetch zkApp activity',
-        );
+        if (gen.isCurrent(token)) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to fetch zkApp activity',
+          );
+        }
       } finally {
-        setLoading(false);
+        if (gen.isCurrent(token)) setLoading(false);
       }
     }
 

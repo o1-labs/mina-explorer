@@ -1,4 +1,5 @@
 import type { GraphQLResponse, GraphQLError } from '@/types';
+import { fetchWithTimeout, isTimeoutError } from './http';
 
 export class ApiError extends Error {
   constructor(
@@ -35,7 +36,7 @@ export class GraphQLClient {
     const startTime = performance.now();
 
     try {
-      const response = await fetch(this.endpoint, {
+      const response = await fetchWithTimeout(this.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,6 +72,12 @@ export class GraphQLClient {
       const duration = Math.round(performance.now() - startTime);
       if (error instanceof ApiError) {
         throw error;
+      }
+      if (isTimeoutError(error)) {
+        const timeoutMsg =
+          'Request timed out. The endpoint may be unavailable.';
+        console.error(`[API] ${queryName} TIMEOUT (${duration}ms)`);
+        throw new ApiError(timeoutMsg);
       }
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[API] ${queryName} FAILED (${duration}ms):`, errorMsg);

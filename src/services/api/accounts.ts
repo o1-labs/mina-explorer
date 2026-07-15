@@ -1,5 +1,6 @@
 import type { Account } from '@/types';
 import { getDaemonEndpoint } from './daemon';
+import { fetchWithTimeout } from './http';
 
 // Daemon GraphQL query for account data
 // Note: The daemon uses PublicKey scalar type, not String
@@ -111,7 +112,7 @@ async function queryDaemon<T>(
   variables: Record<string, unknown>,
 ): Promise<T> {
   const endpoint = getDaemonEndpoint();
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
