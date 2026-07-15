@@ -520,6 +520,22 @@ export async function fetchTransactionByHash(
   return null;
 }
 
+// The account history only scans this many of the most recent blocks. The
+// UI must disclose this window (#89) — exported so the copy stays in sync
+// with the actual query limit (mirrors BLOCK_HASH_SEARCH_WINDOW from #73).
+export const ACCOUNT_TX_SEARCH_WINDOW = 500;
+
+// Schema errors mean the endpoint doesn't support the query shape (archive
+// flat vs daemon nested vs no zkApp support) — the caller should fall through
+// to the next query tier. Anything else (timeout, HTTP 5xx, network) is a
+// real failure that must surface to the UI.
+function isSchemaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : '';
+  return (
+    message.includes('zkappCommands') || message.includes('Cannot query field')
+  );
+}
+
 // Account transaction type for history
 export interface AccountTransaction {
   hash: string;
@@ -537,11 +553,13 @@ export interface AccountTransaction {
 
 /**
  * Fetch transaction history for an account
- * Returns sent and received transactions
+ * Returns sent and received transactions from the most recent
+ * ACCOUNT_TX_SEARCH_WINDOW blocks. Throws when no query tier could produce
+ * data, so the UI can show its error state instead of a false empty history.
  */
 export async function fetchAccountTransactions(
   publicKey: string,
-  limit: number = 500,
+  limit: number = ACCOUNT_TX_SEARCH_WINDOW,
 ): Promise<AccountTransaction[]> {
   const client = getClient();
   const transactions: AccountTransaction[] = [];
@@ -655,7 +673,10 @@ export async function fetchAccountTransactions(
     }
   };
 
-  // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps)
+  // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps).
+  // Schema errors ("Cannot query field") fall through to the next tier;
+  // any other failure (timeout, HTTP 5xx, network) propagates so the UI
+  // shows its error state instead of a false "No transactions found" (#89).
   try {
     const data = await client.query<SearchTransactionResponse>(
       SEARCH_TRANSACTION_QUERY_FULL,
@@ -663,41 +684,42 @@ export async function fetchAccountTransactions(
     );
     extractTransactions(data);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '';
-    const unsupported =
-      errorMessage.includes('zkappCommands') ||
-      errorMessage.includes('Cannot query field');
+    if (!isSchemaError(error)) throw error;
 
-    if (unsupported) {
-      // Try flat schema
-      try {
-        const data = await client.query<SearchTransactionFlatResponse>(
-          SEARCH_TRANSACTION_QUERY_FLAT,
-          { limit },
-        );
-        extractTransactionsFlat(data);
-      } catch {
-        // Flat also failed — try basic (no zkApp data)
-        try {
-          const data = await client.query<SearchTransactionResponse>(
-            SEARCH_TRANSACTION_QUERY_BASIC,
-            { limit },
-          );
-          extractTransactions(data);
-        } catch (basicError) {
-          console.error(
-            '[API] Error with basic account transactions:',
-            basicError,
-          );
-        }
-      }
-    } else {
-      console.error('[API] Error fetching account transactions:', error);
+    // Try flat schema
+    try {
+      const data = await client.query<SearchTransactionFlatResponse>(
+        SEARCH_TRANSACTION_QUERY_FLAT,
+        { limit },
+      );
+      extractTransactionsFlat(data);
+    } catch (flatError) {
+      if (!isSchemaError(flatError)) throw flatError;
+
+      // Last resort: basic query (no zkApp data). If this also fails, no
+      // tier produced data — let the error reach the hook.
+      const data = await client.query<SearchTransactionResponse>(
+        SEARCH_TRANSACTION_QUERY_BASIC,
+        { limit },
+      );
+      extractTransactions(data);
+    }
+  }
+
+  // The archive `blocks` query includes non-canonical (fork) blocks, so the
+  // same transaction can appear in more than one block. Deduplicate by hash,
+  // keeping the highest-block instance. Proper canonicality filtering
+  // (inBestChain) for transaction queries is tracked in #97.
+  const byHash = new Map<string, AccountTransaction>();
+  for (const tx of transactions) {
+    const existing = byHash.get(tx.hash);
+    if (!existing || tx.blockHeight > existing.blockHeight) {
+      byHash.set(tx.hash, tx);
     }
   }
 
   // Sort by block height descending (newest first)
-  return transactions.sort((a, b) => b.blockHeight - a.blockHeight);
+  return [...byHash.values()].sort((a, b) => b.blockHeight - a.blockHeight);
 }
 
 // --- Paginated confirmed transactions ---
