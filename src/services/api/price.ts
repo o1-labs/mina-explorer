@@ -33,6 +33,12 @@ export interface HistoricalPrice {
 // In-memory cache for current price
 let currentPriceCache: MINAPrice | null = null;
 
+// A single in-flight request shared by all concurrent callers. Without this, a
+// page full of <Amount> components (each reading the price) would fire one
+// CoinGecko request apiece on a cold cache and get rate-limited. Cleared once
+// the request settles so the next refresh can fetch again.
+let inFlightPriceRequest: Promise<MINAPrice> | null = null;
+
 // In-memory cache for historical prices (keyed by date string DD-MM-YYYY)
 const historicalPriceCache = new Map<string, HistoricalPrice>();
 
@@ -95,15 +101,37 @@ loadCacheFromStorage();
  * Fetch current MINA price in USD and EUR
  * Uses CoinGecko simple/price endpoint
  */
-export async function fetchCurrentPrice(): Promise<MINAPrice> {
-  // Check cache first
+export async function fetchCurrentPrice(options?: {
+  forceRefresh?: boolean;
+}): Promise<MINAPrice> {
+  // Serve a fresh cached price without touching the network, unless the caller
+  // explicitly wants fresh data (e.g. the provider's scheduled refresh).
   if (
+    !options?.forceRefresh &&
     currentPriceCache &&
     Date.now() - currentPriceCache.lastUpdated < CURRENT_PRICE_CACHE_DURATION
   ) {
     return currentPriceCache;
   }
 
+  // Coalesce concurrent callers onto one network request. A forced refresh
+  // still joins an in-flight request — it is already fetching fresh data.
+  if (inFlightPriceRequest) {
+    return inFlightPriceRequest;
+  }
+
+  inFlightPriceRequest = requestCurrentPrice().finally(() => {
+    inFlightPriceRequest = null;
+  });
+  return inFlightPriceRequest;
+}
+
+/**
+ * Perform the actual CoinGecko current-price fetch and update the cache. Kept
+ * separate from fetchCurrentPrice so the caching / in-flight-dedup logic stays
+ * readable; callers should go through fetchCurrentPrice.
+ */
+async function requestCurrentPrice(): Promise<MINAPrice> {
   const url = `${COINGECKO_API_BASE}/simple/price?ids=${MINA_COIN_ID}&vs_currencies=usd,eur&include_24hr_change=true`;
 
   const response = await fetch(url);
