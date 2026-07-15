@@ -1,3 +1,11 @@
+/**
+ * Where a block sits relative to the best chain:
+ * - 'canonical' — finalized on the best chain
+ * - 'pending' — on the best chain but not yet finalized
+ * - 'orphaned' — on an abandoned fork (not part of the best chain)
+ */
+export type ChainStatus = 'canonical' | 'pending' | 'orphaned';
+
 export interface Block {
   blockHeight: number;
   stateHash: string;
@@ -10,6 +18,7 @@ export interface Block {
   txFees: string;
   snarkFees: string;
   canonical: boolean;
+  chainStatus: ChainStatus;
   receivedTime: string;
   winnerAccount: {
     publicKey: string;

@@ -68,12 +68,18 @@ export function BlockDetail({
             <span
               className={cn(
                 'rounded-full px-2 py-0.5 text-xs font-medium',
-                block.canonical
-                  ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-                  : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+                block.chainStatus === 'orphaned'
+                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                  : block.canonical
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                    : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
               )}
             >
-              {block.canonical ? 'Canonical' : 'Pending'}
+              {block.chainStatus === 'orphaned'
+                ? 'Orphaned'
+                : block.canonical
+                  ? 'Canonical'
+                  : 'Pending'}
             </span>
           </div>
           <button

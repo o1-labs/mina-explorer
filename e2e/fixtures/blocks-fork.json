@@ -1,0 +1,114 @@
+{
+  "networkState": {
+    "maxBlockHeight": {
+      "canonicalMaxBlockHeight": 499998,
+      "pendingMaxBlockHeight": 500000
+    }
+  },
+  "blocks": [
+    {
+      "blockHeight": 500000,
+      "stateHash": "3NKtipBlockPendingXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6E",
+      "parentHash": "3NKmidBlockPendingXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6E",
+      "creator": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+      "dateTime": "2026-07-14T12:06:00.000Z",
+      "orphaned": false,
+      "transactions": {
+        "coinbase": "720000000000",
+        "userCommands": [],
+        "zkappCommands": [],
+        "feeTransfer": []
+      }
+    },
+    {
+      "blockHeight": 499999,
+      "stateHash": "3NKmidBlockPendingXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6E",
+      "parentHash": "3NLcanonicalForkBlockXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQ",
+      "creator": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+      "dateTime": "2026-07-14T12:03:00.000Z",
+      "orphaned": false,
+      "transactions": {
+        "coinbase": "720000000000",
+        "userCommands": [],
+        "zkappCommands": [],
+        "feeTransfer": []
+      }
+    },
+    {
+      "blockHeight": 499998,
+      "stateHash": "3NLorphanedForkBlockXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV",
+      "parentHash": "3NKparentOfForkXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6EnPw",
+      "creator": "B62qkRodi7nj6W1geB12UuW2XAx2yidWZCcDthJvkf9G4A6G5GFasVQ",
+      "dateTime": "2026-07-14T12:00:00.000Z",
+      "orphaned": true,
+      "transactions": {
+        "coinbase": "720000000000",
+        "userCommands": [
+          {
+            "hash": "CkpOrphanedBlockTxXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6En",
+            "kind": "payment",
+            "from": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+            "to": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+            "amount": "2500000000",
+            "fee": "100000000",
+            "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4TVDDpTTSsv8mK6YaH",
+            "nonce": 7,
+            "failureReason": null
+          }
+        ],
+        "zkappCommands": [],
+        "feeTransfer": []
+      }
+    },
+    {
+      "blockHeight": 499998,
+      "stateHash": "3NLcanonicalForkBlockXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQ",
+      "parentHash": "3NKparentOfForkXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6EnPw",
+      "creator": "B62qiy32p8kAKnny8ZFwoMhYpBppM1DWVCqAPBYNcXnsAHhnfAAuXgg",
+      "dateTime": "2026-07-14T12:00:00.000Z",
+      "orphaned": false,
+      "transactions": {
+        "coinbase": "720000000000",
+        "userCommands": [
+          {
+            "hash": "CkpCanonicalBlockTxXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6E",
+            "kind": "payment",
+            "from": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+            "to": "B62qkRodi7nj6W1geB12UuW2XAx2yidWZCcDthJvkf9G4A6G5GFasVQ",
+            "amount": "1000000000",
+            "fee": "100000000",
+            "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4TVDDpTTSsv8mK6YaH",
+            "nonce": 3,
+            "failureReason": null
+          }
+        ],
+        "zkappCommands": [],
+        "feeTransfer": []
+      }
+    }
+  ],
+  "daemonBlock": {
+    "stateHash": "3NLcanonicalForkBlockXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQ",
+    "protocolState": {
+      "previousStateHash": "3NKparentOfForkXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6EnPw"
+    },
+    "transactions": {
+      "coinbase": "720000000000",
+      "userCommands": [
+        {
+          "hash": "CkpDaemonBestChainTxXq7RJTujV3ZfyPHZBGrWFUqYuBZXCDQV6",
+          "kind": "PAYMENT",
+          "from": "B62qpge4uMq4Vv5Rvc8Gw9qSquUYd6xoW1pz7HQkMSHm6h1o7pvLPAN",
+          "to": "B62qkRodi7nj6W1geB12UuW2XAx2yidWZCcDthJvkf9G4A6G5GFasVQ",
+          "amount": "1000000000",
+          "fee": "100000000",
+          "memo": "E4YM2vTHhWEg66xpj52JErHUBU4pZ1yageL4TVDDpTTSsv8mK6YaH",
+          "nonce": 3,
+          "failureReason": null
+        }
+      ],
+      "zkappCommands": [],
+      "feeTransfer": []
+    }
+  }
+}
