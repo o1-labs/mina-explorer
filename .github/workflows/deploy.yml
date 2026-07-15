@@ -19,6 +19,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_e2e:
+        description: 'EMERGENCY ONLY — bypass the mocked e2e gate. Deploys without running the Playwright suite. Push-to-main deploys always run the gate.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -66,12 +71,59 @@ jobs:
           path: dist
           retention-days: 7
 
+  # Gate: the mocked Playwright e2e suite must pass before the Pages deploy.
+  # Mirrors ci.yml's e2e job (#92) — same steps, same SHA pins, MOCK_API=true.
+  # Skippable ONLY via the workflow_dispatch skip_e2e input (emergency deploys);
+  # push-to-main runs always execute this gate.
+  e2e:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || inputs.skip_e2e != true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npx vite build
+
+      - name: Run e2e tests (mocked)
+        env:
+          MOCK_API: 'true'
+        run: npx playwright test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, e2e]
+    # always() is required so a skipped e2e (dispatch escape hatch) does not
+    # cancel this job; the explicit result checks keep a FAILED or CANCELLED
+    # e2e (or build) from deploying. e2e can only be 'skipped' via the
+    # workflow_dispatch skip_e2e input — push runs always execute the gate.
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.e2e.result == 'success' || needs.e2e.result == 'skipped')
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
