@@ -314,6 +314,7 @@ interface UsePaginatedTransactionsResult {
   error: string | null;
   hasMore: boolean;
   totalBlockHeight: number;
+  isDaemonFallback: boolean;
   page: number;
   totalPages: number;
   goToPage: (page: number) => void;
@@ -333,8 +334,16 @@ export function usePaginatedTransactions(
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [totalBlockHeight, setTotalBlockHeight] = useState(0);
+  const [totalPageableBlocks, setTotalPageableBlocks] = useState(0);
+  const [isDaemonFallback, setIsDaemonFallback] = useState(false);
 
-  const totalPages = Math.max(1, Math.ceil(totalBlockHeight / blocksPerPage));
+  // Page math uses the pageable quantity, NOT the raw chain height — on the
+  // daemon fallback only a small recent-block window is reachable, and using
+  // the chain height would fabricate thousands of identical pages (#90).
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalPageableBlocks / blocksPerPage),
+  );
 
   const loadPage = useCallback(
     async (pageNum: number, forceRefresh: boolean = false) => {
@@ -353,9 +362,21 @@ export function usePaginatedTransactions(
         if (gen.isCurrent(token)) {
           setTransactions(data.transactions);
           setHasMore(data.hasMore);
+          setIsDaemonFallback(data.source === 'daemon-fallback');
+
+          if (data.source === 'daemon-fallback') {
+            // The archive degraded — possibly mid-session from page > 1.
+            // Only the daemon window is pageable now, so collapse the page
+            // math to it immediately and snap back to page 1; otherwise a
+            // stale "Page 3 of 8,000" would keep re-showing the same
+            // fallback window (#90).
+            setTotalPageableBlocks(data.totalPageableBlocks);
+            setPage(1);
+          }
 
           if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
             setTotalBlockHeight(data.totalBlockHeight);
+            setTotalPageableBlocks(data.totalPageableBlocks);
           }
         }
       } catch (err) {
@@ -374,6 +395,8 @@ export function usePaginatedTransactions(
   useEffect(() => {
     setPage(1);
     setTotalBlockHeight(0);
+    setTotalPageableBlocks(0);
+    setIsDaemonFallback(false);
     loadPage(1, true);
   }, [network.id, blocksPerPage]);
 
@@ -415,6 +438,7 @@ export function usePaginatedTransactions(
     error,
     hasMore,
     totalBlockHeight,
+    isDaemonFallback,
     page,
     totalPages,
     goToPage,

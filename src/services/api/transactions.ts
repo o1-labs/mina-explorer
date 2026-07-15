@@ -743,7 +743,17 @@ export interface TransactionsPageResult {
   transactions: ConfirmedTransaction[];
   hasMore: boolean;
   nextCursor: number | null;
+  /** Real chain height (for display) — NOT a measure of pageable data. */
   totalBlockHeight: number;
+  /**
+   * How many blocks can actually be paged through. Equals the chain height
+   * when the archive serves full history; on the daemon fallback it is only
+   * the small recent-block window, so page math must use this — never
+   * totalBlockHeight — to avoid fabricating pages (#90).
+   */
+  totalPageableBlocks: number;
+  /** Which backend produced this page of results. */
+  source: 'archive' | 'daemon-fallback';
 }
 
 // Archive queries for confirmed transactions (requires Archive-Node-API PR 148+)
@@ -934,6 +944,8 @@ export async function fetchTransactionsPaginated(
       hasMore: lastBlock ? lastBlock.blockHeight > 1 : false,
       nextCursor: lastBlock ? lastBlock.blockHeight : null,
       totalBlockHeight: totalHeight,
+      totalPageableBlocks: totalHeight,
+      source: 'archive',
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : '';
@@ -947,7 +959,11 @@ export async function fetchTransactionsPaginated(
         transactions: daemon.transactions,
         hasMore: false,
         nextCursor: null,
+        // Real chain height, kept for display only — the daemon window is
+        // the pageable quantity, so page math must not use this (#90).
         totalBlockHeight: daemon.newestBlockHeight,
+        totalPageableBlocks: daemon.blocksScanned,
+        source: 'daemon-fallback',
       };
     }
     throw error;
@@ -1133,7 +1149,9 @@ export async function fetchRecentTransactions(
 
     return {
       transactions,
-      blocksScanned: sorted.length,
+      // Clamp defensively: a nonconforming daemon returning more than the
+      // requested window must not inflate the pageable count downstream (#90).
+      blocksScanned: Math.min(sorted.length, MAX_DAEMON_BLOCKS),
       oldestBlockHeight: Math.min(...heights),
       newestBlockHeight: Math.max(...heights),
     };
