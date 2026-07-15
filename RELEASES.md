@@ -95,7 +95,7 @@ docker run --rm -p 8080:8080 ghcr.io/o1-labs/mina-explorer:latest
 podman run --rm -p 8080:8080 ghcr.io/o1-labs/mina-explorer:latest
 ```
 
-The image listens on port 8080 (rootless-friendly — runs as the unprivileged nginx user UID 101). It's based on `nginxinc/nginx-unprivileged:1.27-alpine`.
+The image listens on port 8080 (rootless-friendly — runs as the unprivileged nginx user UID 101). It's based on `nginxinc/nginx-unprivileged:1.30-alpine`.
 
 ### Runtime configuration
 

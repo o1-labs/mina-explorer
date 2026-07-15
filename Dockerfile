@@ -10,7 +10,7 @@
 #   podman build -t mina-explorer:dev .
 
 ARG NODE_VERSION=22-alpine
-ARG NGINX_VERSION=1.27-alpine
+ARG NGINX_VERSION=1.30-alpine
 
 # ---- build stage --------------------------------------------------------
 FROM node:${NODE_VERSION} AS build
