@@ -13,7 +13,7 @@ import {
   CUSTOM_ENDPOINT_KEY,
   type NetworkConfig,
 } from '@/config';
-import { initClient, getClient } from '@/services/api';
+import { initClient, getClient, setDaemonEndpoint } from '@/services/api';
 import {
   getStoredItem,
   setStoredItem,
@@ -66,9 +66,14 @@ function getInitialEndpoint(): {
   };
 }
 
-// Initialize client immediately with default or saved custom endpoint
+// Initialize clients immediately with default or saved custom endpoint. The
+// daemon endpoint is a singleton kept in lockstep with the archive client so
+// daemon calls never re-resolve the network from URL/localStorage at call
+// time (#88). getInitialEndpoint already honours a saved custom endpoint for
+// both (network.daemonEndpoint === savedCustom in that case).
 const initial = getInitialEndpoint();
 initClient(initial.network.archiveEndpoint);
+setDaemonEndpoint(initial.network.daemonEndpoint);
 
 interface NetworkProviderProps {
   children: ReactNode;
@@ -108,6 +113,7 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
         const newNetwork = NETWORKS[urlId];
         setNetworkState(newNetwork);
         getClient().setEndpoint(newNetwork.archiveEndpoint);
+        setDaemonEndpoint(newNetwork.daemonEndpoint);
       }
       return;
     }
@@ -126,6 +132,7 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
       removeStoredItem(CUSTOM_ENDPOINT_KEY);
       setStoredItem(NETWORK_KEY, networkId);
       getClient().setEndpoint(newNetwork.archiveEndpoint);
+      setDaemonEndpoint(newNetwork.daemonEndpoint);
       const next = new URLSearchParams(searchParams);
       next.set(NETWORK_PARAM, networkId);
       setSearchParams(next, { replace: true });
@@ -147,6 +154,7 @@ export function NetworkProvider({ children }: NetworkProviderProps): ReactNode {
       setCustomEndpointState(endpoint);
       setStoredItem(CUSTOM_ENDPOINT_KEY, endpoint);
       getClient().setEndpoint(endpoint);
+      setDaemonEndpoint(endpoint);
       // Drop any stale `network` param — it doesn't apply to custom endpoints.
       const next = new URLSearchParams(searchParams);
       next.delete(NETWORK_PARAM);
