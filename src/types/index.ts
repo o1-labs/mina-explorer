@@ -1,6 +1,7 @@
 export type {
   Block,
   BlockSummary,
+  ChainStatus,
   BlockDetail,
   UserCommand,
   ZkAppCommand,

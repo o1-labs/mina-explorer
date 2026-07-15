@@ -92,6 +92,9 @@ test.describe('block fees summary (#70)', () => {
         body: JSON.stringify({
           data: {
             block: {
+              // Real daemons always return the block's stateHash; enrichment
+              // (#86) only merges when it matches the displayed block.
+              stateHash: '3NKmesaNoExtBlock0000000000000000000000000000000000',
               protocolState: {
                 previousStateHash:
                   '3NKmesaNoExtParent000000000000000000000000000000000',

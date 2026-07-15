@@ -50,9 +50,23 @@ export class GraphQLClient {
       const duration = Math.round(performance.now() - startTime);
 
       if (!response.ok) {
-        const errorMsg = `HTTP error: ${response.status} ${response.statusText}`;
+        // Some GraphQL servers transport validation errors with a non-2xx
+        // status; surface those messages (callers inspect them, e.g. to
+        // detect unsupported query filters) instead of a bare HTTP error.
+        let errors: GraphQLError[] | undefined;
+        try {
+          const body = (await response.json()) as GraphQLResponse<T>;
+          if (body.errors && body.errors.length > 0) {
+            errors = body.errors;
+          }
+        } catch {
+          // Body is not JSON; fall through to the generic HTTP error.
+        }
+        const errorMsg = errors
+          ? `GraphQL error: ${errors.map(e => e.message).join(', ')}`
+          : `HTTP error: ${response.status} ${response.statusText}`;
         console.error(`[API] ${queryName} FAILED (${duration}ms):`, errorMsg);
-        throw new ApiError(errorMsg);
+        throw new ApiError(errorMsg, errors);
       }
 
       const result = (await response.json()) as GraphQLResponse<T>;
