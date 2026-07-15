@@ -1,6 +1,5 @@
 import { NETWORKS, DEFAULT_NETWORK } from './networks';
 import { getStoredItem } from '@/lib/safeStorage';
-import { isSafeUrl } from '@/utils/formatters';
 
 const NETWORK_KEY = 'mina-explorer-network';
 const NETWORK_PARAM = 'network';
@@ -31,8 +30,14 @@ export function getActiveNetworkIdFromHash(): string | null {
  *   3. DEFAULT_NETWORK
  *
  * Note: this helper deliberately does NOT consult the custom-endpoint entry —
- * callers that need to honour a custom endpoint call getActiveCustomEndpoint()
- * first (as getInitialEndpoint and getDaemonEndpoint do).
+ * callers that need to honour a custom endpoint check CUSTOM_ENDPOINT_KEY
+ * first (as NetworkContext's getInitialEndpoint does).
+ *
+ * This is a load-time/initialization helper. Per-request endpoint resolution
+ * must NOT use it — request endpoints come from the NetworkContext-managed
+ * singletons (getClient for the archive, getDaemonEndpoint for the daemon),
+ * because the URL param is momentarily absent during internal navigation and
+ * session-scoped networks are never in localStorage (#88).
  */
 export function resolveActiveNetworkId(): string {
   const fromUrl = getActiveNetworkIdFromHash();
@@ -42,15 +47,4 @@ export function resolveActiveNetworkId(): string {
   if (saved && NETWORKS[saved]) return saved;
 
   return DEFAULT_NETWORK;
-}
-
-/**
- * The user-configured custom endpoint (used for BOTH the archive and the
- * daemon), or null when none is set or it isn't a valid http(s) URL. Unlike
- * resolveActiveNetworkId(), this DOES honour the custom override, so archive
- * and daemon callers stay on the same endpoint instead of silently diverging.
- */
-export function getActiveCustomEndpoint(): string | null {
-  const saved = getStoredItem(CUSTOM_ENDPOINT_KEY);
-  return saved && isSafeUrl(saved) ? saved : null;
 }

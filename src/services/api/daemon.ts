@@ -1,18 +1,28 @@
-import {
-  NETWORKS,
-  resolveActiveNetworkId,
-  getActiveCustomEndpoint,
-} from '@/config';
 import { fetchWithTimeout } from './http';
 
+// The daemon endpoint is a singleton set from NetworkContext state, mirroring
+// the archive client (initClient/getClient): initialized at module load of
+// NetworkContext and updated at the exact moments the archive endpoint is
+// updated (setNetwork, setCustomEndpoint, URL-param adoption). It must never
+// be re-resolved from the URL/localStorage at call time — during internal
+// navigation the URL momentarily has no `?network=` param, and a network
+// adopted from a shared link is deliberately not written to localStorage, so
+// call-time resolution could silently target a different network than the one
+// the UI displays (#88). A custom endpoint overrides the selected network for
+// the daemon too (#71); NetworkContext passes it through this same setter.
+let daemonEndpoint: string | null = null;
+
+export function setDaemonEndpoint(endpoint: string): void {
+  daemonEndpoint = endpoint;
+}
+
 export function getDaemonEndpoint(): string {
-  // A custom endpoint overrides the selected network for the daemon too, so
-  // account/mempool reads and broadcasts hit the endpoint the user configured
-  // (not the previously selected public network).
-  return (
-    getActiveCustomEndpoint() ??
-    NETWORKS[resolveActiveNetworkId()].daemonEndpoint
-  );
+  if (!daemonEndpoint) {
+    throw new Error(
+      'Daemon endpoint not initialized. Call setDaemonEndpoint first.',
+    );
+  }
+  return daemonEndpoint;
 }
 
 interface GraphQLResponse<T> {
