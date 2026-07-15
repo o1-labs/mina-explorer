@@ -273,49 +273,66 @@ export function calculateNetworkAnalytics(
 
   let dailyStats = aggregateDailyStats(blocks);
 
-  const totalBlocks = blocks.length;
-  const totalTxCount = blocks.reduce((sum, b) => sum + b.txCount, 0);
-  const totalZkappCount = blocks.reduce((sum, b) => sum + b.zkappCount, 0);
-  const totalFees = blocks.reduce(
-    (sum, b) => sum + BigInt(b.totalFees || '0'),
-    BigInt(0),
-  );
-
-  // Calculate average block time from sorted blocks
-  const sortedBlocks = [...blocks].sort(
+  const rawSorted = [...blocks].sort(
     (a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime(),
   );
-
-  let totalBlockTime = 0;
-  for (let i = 1; i < sortedBlocks.length; i++) {
-    const timeDiff =
-      new Date(sortedBlocks[i].dateTime).getTime() -
-      new Date(sortedBlocks[i - 1].dateTime).getTime();
-    totalBlockTime += timeDiff / 1000;
-  }
-  const avgBlockTime =
-    sortedBlocks.length > 1 ? totalBlockTime / (sortedBlocks.length - 1) : 0;
 
   // The query is capped at ANALYTICS_BLOCK_LIMIT blocks. If the cap was hit
   // and the fetched blocks span meaningfully less than the selected period,
   // the period was silently truncated: stats must be computed over the range
   // the blocks actually cover, not the full period (#87).
-  const spanSeconds = Math.max(
+  const rawSpanSeconds = Math.max(
     0,
-    (new Date(sortedBlocks[sortedBlocks.length - 1].dateTime).getTime() -
-      new Date(sortedBlocks[0].dateTime).getTime()) /
+    (new Date(rawSorted[rawSorted.length - 1].dateTime).getTime() -
+      new Date(rawSorted[0].dateTime).getTime()) /
       1000,
   );
   const truncated =
     blocks.length >= ANALYTICS_BLOCK_LIMIT &&
-    spanSeconds < periodSeconds * 0.98;
-  const coveredSeconds = truncated ? spanSeconds : periodSeconds;
+    rawSpanSeconds < periodSeconds * 0.98;
 
+  // One coherent block set: when truncated, the oldest day is cut mid-day by
+  // the block cap. Drop that partial bucket AND its blocks, so the tiles,
+  // TPS, covered range, and charts all describe the same data — the partial
+  // day must neither render as a plausible full-day bar nor leak into totals.
+  let countedBlocks = rawSorted;
   if (truncated && dailyStats.length > 1) {
-    // The oldest day is cut mid-day by the block cap — drop the partial
-    // bucket so it does not render as a plausible full-day bar.
+    const partialDate = dailyStats[0].date;
     dailyStats = dailyStats.slice(1);
+    countedBlocks = rawSorted.filter(
+      b => b.dateTime.split('T')[0] !== partialDate,
+    );
   }
+
+  const totalBlocks = countedBlocks.length;
+  const totalTxCount = countedBlocks.reduce((sum, b) => sum + b.txCount, 0);
+  const totalZkappCount = countedBlocks.reduce(
+    (sum, b) => sum + b.zkappCount,
+    0,
+  );
+  const totalFees = countedBlocks.reduce(
+    (sum, b) => sum + BigInt(b.totalFees || '0'),
+    BigInt(0),
+  );
+
+  // Calculate average block time from the counted (already sorted) blocks
+  let totalBlockTime = 0;
+  for (let i = 1; i < countedBlocks.length; i++) {
+    const timeDiff =
+      new Date(countedBlocks[i].dateTime).getTime() -
+      new Date(countedBlocks[i - 1].dateTime).getTime();
+    totalBlockTime += timeDiff / 1000;
+  }
+  const avgBlockTime =
+    countedBlocks.length > 1 ? totalBlockTime / (countedBlocks.length - 1) : 0;
+
+  const spanSeconds = Math.max(
+    0,
+    (new Date(countedBlocks[countedBlocks.length - 1].dateTime).getTime() -
+      new Date(countedBlocks[0].dateTime).getTime()) /
+      1000,
+  );
+  const coveredSeconds = truncated ? spanSeconds : periodSeconds;
 
   // Calculate TPS (transactions per second) over the covered range
   const avgTps = coveredSeconds > 0 ? totalTxCount / coveredSeconds : 0;
