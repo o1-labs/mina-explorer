@@ -509,6 +509,11 @@ async function fetchBlocksListWithFallback(
         );
         filteredError = error;
         lastError = error;
+        // A validation error on the filter itself dooms every filtered
+        // variant identically — skip straight to the unfiltered fallback.
+        if (isBestChainFilterError(error)) {
+          break;
+        }
       }
     }
   }
