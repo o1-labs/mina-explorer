@@ -26,6 +26,15 @@ const PERIOD_OPTIONS: { value: AnalyticsPeriod; label: string }[] = [
 export function AnalyticsPage(): ReactNode {
   const { analytics, loading, error, period, setPeriod } = useAnalytics();
 
+  // When the block cap truncates the selected period, every label must show
+  // the range the stats actually cover — no silent truncation (#87).
+  const rangeLabel = analytics?.truncated
+    ? `last ${analytics.coveredLabel}`
+    : (analytics?.period ?? '');
+  const chartRangeSuffix = analytics?.truncated
+    ? ` (last ${analytics.coveredLabel})`
+    : '';
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -67,13 +76,26 @@ export function AnalyticsPage(): ReactNode {
 
       {analytics && !loading && (
         <>
+          {/* Coverage notice when the block cap truncates the period */}
+          {analytics.truncated && (
+            <div
+              data-testid="analytics-coverage-notice"
+              className="rounded-md border border-border bg-muted p-4 text-sm text-muted-foreground"
+            >
+              Showing the most recent {analytics.coveredLabel} of the selected{' '}
+              {analytics.period} — the query returns at most the newest blocks
+              in the period. All totals, charts, and TPS below cover only this
+              range.
+            </div>
+          )}
+
           {/* Stats Cards */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
               icon={Layers}
               label="Total Blocks"
               value={formatNumber(analytics.totalBlocks)}
-              description={`In ${analytics.period}`}
+              description={`In ${rangeLabel}`}
             />
             <StatCard
               icon={Activity}
@@ -97,7 +119,11 @@ export function AnalyticsPage(): ReactNode {
               icon={Users}
               label="TPS"
               value={analytics.avgTps.toFixed(4)}
-              description="Transactions per second"
+              description={
+                analytics.truncated
+                  ? `Transactions per second over ${rangeLabel}`
+                  : 'Transactions per second'
+              }
             />
             <StatCard
               icon={DollarSign}
@@ -111,7 +137,9 @@ export function AnalyticsPage(): ReactNode {
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Block Production Chart */}
             <div className="rounded-lg border border-border bg-card p-6">
-              <h3 className="mb-4 font-semibold">Block Production</h3>
+              <h3 className="mb-4 font-semibold">
+                Block Production{chartRangeSuffix}
+              </h3>
               <div className="h-[300px]">
                 {analytics.dailyStats.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -157,7 +185,9 @@ export function AnalyticsPage(): ReactNode {
 
             {/* Transaction Volume Chart */}
             <div className="rounded-lg border border-border bg-card p-6">
-              <h3 className="mb-4 font-semibold">Transaction Volume</h3>
+              <h3 className="mb-4 font-semibold">
+                Transaction Volume{chartRangeSuffix}
+              </h3>
               <div className="h-[300px]">
                 {analytics.dailyStats.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -209,7 +239,9 @@ export function AnalyticsPage(): ReactNode {
 
             {/* Average Block Time Chart */}
             <div className="rounded-lg border border-border bg-card p-6">
-              <h3 className="mb-4 font-semibold">Average Block Time</h3>
+              <h3 className="mb-4 font-semibold">
+                Average Block Time{chartRangeSuffix}
+              </h3>
               <div className="h-[300px]">
                 {analytics.dailyStats.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -257,7 +289,9 @@ export function AnalyticsPage(): ReactNode {
 
             {/* Daily Stats Table */}
             <div className="rounded-lg border border-border bg-card p-6">
-              <h3 className="mb-4 font-semibold">Daily Summary</h3>
+              <h3 className="mb-4 font-semibold">
+                Daily Summary{chartRangeSuffix}
+              </h3>
               <div className="max-h-[300px] overflow-auto">
                 {analytics.dailyStats.length > 0 ? (
                   <table className="w-full text-sm">
@@ -324,7 +358,10 @@ function StatCard({
   description,
 }: StatCardProps): ReactNode {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div
+      data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}
+      className="rounded-lg border border-border bg-card p-4"
+    >
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon size={16} />
         <span className="text-sm">{label}</span>
