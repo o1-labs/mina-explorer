@@ -10,6 +10,7 @@ import {
 } from '@/components/common';
 import { formatNumber, formatTimeAgo, decodeMemo } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
+import { ACCOUNT_TX_SEARCH_WINDOW } from '@/services/api/transactions';
 import type { AccountTransaction } from '@/services/api/transactions';
 
 interface AccountTransactionsProps {
@@ -20,6 +21,9 @@ export function AccountTransactions({
   publicKey,
 }: AccountTransactionsProps): ReactNode {
   const { transactions, loading, error } = useAccountTransactions(publicKey);
+  // Disclose the scan window so a partial (or empty) history is never
+  // presented as the complete record (#89).
+  const searchWindow = ACCOUNT_TX_SEARCH_WINDOW.toLocaleString('en-US');
 
   if (loading) {
     return (
@@ -44,13 +48,15 @@ export function AccountTransactions({
       <div className="border-b border-border px-6 py-4">
         <h3 className="font-semibold">Transaction History</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {transactions.length} transactions found
+          {transactions.length} transactions found in the most recent{' '}
+          {searchWindow} blocks
         </p>
       </div>
 
       {transactions.length === 0 ? (
         <div className="p-6 text-center text-muted-foreground">
-          No transactions found for this account
+          No transactions found for this account in the most recent{' '}
+          {searchWindow} blocks. Older activity may exist beyond this window.
         </div>
       ) : (
         <div className="divide-y divide-border">
