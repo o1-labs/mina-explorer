@@ -295,7 +295,7 @@ jobs:
       # to read the single Secret Manager secret fetched below
       # (o1labs-192920/slackGrafanaAlertsBotToken). The action is now SHA-pinned;
       # the remaining hardening is to migrate this long-lived JSON key to Workload
-      # Identity Federation so no static credential is stored at all.
+      # Identity Federation (tracked in #85) so no static credential is stored.
       - name: Authenticate to GCP (Path A)
         if: steps.tag.outputs.skip != 'true' && steps.exists.outputs.skip != 'true' && env.GCP_SA_KEY != ''
         env:
