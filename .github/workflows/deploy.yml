@@ -77,6 +77,10 @@ jobs:
   # push-to-main runs always execute this gate.
   e2e:
     runs-on: ubuntu-latest
+    # Least privilege (matches ci.yml): the suite only needs to read the repo —
+    # don't inherit the workflow-level pages: write / id-token: write.
+    permissions:
+      contents: read
     if: github.event_name != 'workflow_dispatch' || inputs.skip_e2e != true
     steps:
       - name: Checkout
@@ -116,12 +120,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: [build, e2e]
-    # always() is required so a skipped e2e (dispatch escape hatch) does not
-    # cancel this job; the explicit result checks keep a FAILED or CANCELLED
-    # e2e (or build) from deploying. e2e can only be 'skipped' via the
-    # workflow_dispatch skip_e2e input — push runs always execute the gate.
+    # A status-check function is required so a skipped e2e (dispatch escape
+    # hatch) does not auto-skip this job; !cancelled() (rather than always())
+    # keeps "Cancel workflow run" able to stop the deploy. The explicit result
+    # checks keep a FAILED or CANCELLED e2e (or build) from deploying. e2e can
+    # only be 'skipped' via the workflow_dispatch skip_e2e input — push runs
+    # always execute the gate.
     if: |
-      always() &&
+      !cancelled() &&
       needs.build.result == 'success' &&
       (needs.e2e.result == 'success' || needs.e2e.result == 'skipped')
     steps:
