@@ -93,6 +93,10 @@ function TransactionDetail({
               block
             </li>
             <li>
+              The transaction may exist only in a discarded (orphaned) fork
+              block
+            </li>
+            <li>
               zkApp transactions may not be available on the current network
               endpoint
             </li>

@@ -6,9 +6,10 @@ import { ApiError, type GraphQLClient } from './client';
 // The archive marks every block's chain status (canonical/pending/orphaned)
 // server-side and exposes it through the `inBestChain` filter on
 // BlockQueryInput (verified live against all four networks; the Block type
-// itself has no chainStatus field). `inBestChain: true` returns canonical
-// blocks plus the pending blocks of the current best chain — excluding
-// orphaned fork blocks. Older archive deployments may not know the filter, so
+// itself has no chainStatus field). `inBestChain: true` excludes blocks the
+// archive has already marked orphaned; during a live tip fork, pending
+// sibling blocks of ALL branches are included until the archive orphans the
+// losing branches. Older archive deployments may not know the filter, so
 // every filtered query degrades to its unfiltered variant (and the old
 // height-based heuristics) instead of breaking the view. This module holds
 // the shared support-detection machinery used by the block (#86) and

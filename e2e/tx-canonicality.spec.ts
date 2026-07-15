@@ -154,4 +154,60 @@ test.describe('Transaction canonicality on forks (issue #97)', () => {
     await expect(page.getByText('Confirmed', { exact: true })).toBeVisible();
     await expect(page.getByText('499,998').first()).toBeVisible();
   });
+
+  test('archive without inBestChain degrades to the unfiltered scan and caches the endpoint', async ({
+    page,
+  }) => {
+    let filteredAttempts = 0;
+    let unfilteredServes = 0;
+
+    // Override the archive mock (registered last, so it wins): reject any
+    // filtered query with a validation error naming the field — the signal
+    // an archive that predates the filter emits — and serve unfiltered
+    // queries with ALL blocks, orphan included (old-archive behavior).
+    await page.route(
+      '**/*archive-node-api.gcp.o1test.net/**',
+      async (route: Route) => {
+        const postData = route.request().postData();
+        const query: string = postData ? JSON.parse(postData).query || '' : '';
+        if (query.includes('inBestChain')) {
+          filteredAttempts++;
+          await fulfillJson(route, {
+            errors: [
+              {
+                message:
+                  'Field "inBestChain" is not defined by type ' +
+                  '"BlockQueryInput".',
+              },
+            ],
+          });
+          return;
+        }
+        unfilteredServes++;
+        await fulfillJson(route, { data: { blocks: allBlocks, networkState } });
+      },
+    );
+
+    await page.goto('/#/transactions');
+
+    // Degraded path: the unfiltered retry succeeds and transactions render —
+    // orphan-only transactions are visible again, matching main's behavior
+    // on archives that predate the filter (no regression).
+    await expect(page.getByText(ORPHAN_TX_PREFIX).first()).toBeVisible();
+    await expect(page.getByText(CANONICAL_TX_PREFIX).first()).toBeVisible();
+    // The initial mount may fire more than one fetch (React StrictMode
+    // double-mounts effects in dev), so pin the count rather than assume 1.
+    const filteredAfterLoad = filteredAttempts;
+    expect(filteredAfterLoad).toBeGreaterThanOrEqual(1);
+    expect(unfilteredServes).toBeGreaterThanOrEqual(1);
+
+    // The endpoint is cached as filter-unsupported: a second fetch goes
+    // straight to the unfiltered query with no doomed filtered attempt.
+    const servesBeforeRefresh = unfilteredServes;
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    await expect
+      .poll(() => unfilteredServes)
+      .toBeGreaterThan(servesBeforeRefresh);
+    expect(filteredAttempts).toBe(filteredAfterLoad);
+  });
 });
