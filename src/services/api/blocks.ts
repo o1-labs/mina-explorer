@@ -1,5 +1,6 @@
 import { getClient } from './client';
 import { queryDaemon, isDaemonUnavailableError } from './daemon';
+import { parseNanomina } from '@/utils/formatters';
 import type { BlockSummary, BlockDetail, NetworkState } from '@/types';
 
 // Full query with protocolState, networkState, and transaction counts
@@ -340,20 +341,81 @@ function mapApiBlockToSummary(
   };
 }
 
+/**
+ * Sum a block's fees from its (possibly daemon-enriched) transactions so the
+ * summary card always matches the per-transaction tables below it. Transaction
+ * fees are the user-command fees plus the zkApp fee-payer fees; snark fees are
+ * the standalone `Fee_transfer` entries (not `Fee_transfer_via_coinbase`).
+ * BigInt throughout for exactness; parseNanomina tolerates a missing/malformed
+ * fee (treats it as 0) so one bad value can't abort the whole block fetch. See
+ * issue #70.
+ */
+function computeBlockFees(transactions: BlockDetail['transactions']): {
+  txFees: string;
+  snarkFees: string;
+} {
+  const userFees = (transactions.userCommands || []).reduce(
+    (sum, cmd) => sum + (parseNanomina(cmd.fee) ?? 0n),
+    0n,
+  );
+  const zkappFees = (transactions.zkappCommands || []).reduce(
+    (sum, cmd) =>
+      sum + (parseNanomina(cmd.zkappCommand?.feePayer?.body?.fee) ?? 0n),
+    0n,
+  );
+  const snarkFees = (transactions.feeTransfer || [])
+    .filter(ft => ft.type === 'Fee_transfer')
+    .reduce((sum, ft) => sum + (parseNanomina(ft.fee) ?? 0n), 0n);
+
+  return {
+    txFees: (userFees + zkappFees).toString(),
+    snarkFees: snarkFees.toString(),
+  };
+}
+
 function mapApiBlockToDetail(
   block: ApiBlockDetail,
   canonicalMaxBlockHeight: number,
 ): BlockDetail {
-  // Calculate total tx fees from user commands
-  const txFees = (block.transactions.userCommands || []).reduce(
-    (sum, cmd) => sum + BigInt(cmd.fee || '0'),
-    BigInt(0),
-  );
+  const transactions: BlockDetail['transactions'] = {
+    userCommands: (block.transactions.userCommands || []).map(cmd => ({
+      hash: cmd.hash,
+      kind: cmd.kind,
+      from: cmd.from,
+      to: cmd.to,
+      amount: cmd.amount,
+      fee: cmd.fee,
+      memo: cmd.memo,
+      nonce: cmd.nonce,
+      failureReason: cmd.failureReason,
+      dateTime: block.dateTime,
+    })),
+    zkappCommands: (block.transactions.zkappCommands || []).map(cmd => ({
+      hash: cmd.hash,
+      zkappCommand: {
+        memo: cmd.memo,
+        feePayer: {
+          body: {
+            publicKey: cmd.feePayer,
+            fee: cmd.fee,
+          },
+        },
+        accountUpdates: [],
+      },
+      failureReason: cmd.failureReason ? [cmd.failureReason] : null,
+      dateTime: block.dateTime,
+    })),
+    feeTransfer: (block.transactions.feeTransfer || []).map(ft => ({
+      recipient: ft.recipient,
+      fee: ft.fee,
+      type: ft.type,
+    })),
+    coinbase: block.transactions.coinbase,
+  };
 
-  // Calculate snark fees from fee transfers
-  const snarkFees = (block.transactions.feeTransfer || [])
-    .filter(ft => ft.type === 'Fee_transfer')
-    .reduce((sum, ft) => sum + BigInt(ft.fee || '0'), BigInt(0));
+  // Derive the summary from the mapped transactions so it never contradicts the
+  // tables (matters when this block later gets daemon-enriched too).
+  const { txFees, snarkFees } = computeBlockFees(transactions);
 
   return {
     blockHeight: block.blockHeight,
@@ -362,8 +424,8 @@ function mapApiBlockToDetail(
     creator: block.creator,
     creatorAccount: { publicKey: block.creator },
     dateTime: block.dateTime,
-    txFees: txFees.toString(),
-    snarkFees: snarkFees.toString(),
+    txFees,
+    snarkFees,
     canonical: block.blockHeight <= canonicalMaxBlockHeight,
     receivedTime: block.dateTime,
     winnerAccount: { publicKey: block.creator },
@@ -375,41 +437,7 @@ function mapApiBlockToDetail(
       },
       previousStateHash: block.parentHash ?? '',
     },
-    transactions: {
-      userCommands: (block.transactions.userCommands || []).map(cmd => ({
-        hash: cmd.hash,
-        kind: cmd.kind,
-        from: cmd.from,
-        to: cmd.to,
-        amount: cmd.amount,
-        fee: cmd.fee,
-        memo: cmd.memo,
-        nonce: cmd.nonce,
-        failureReason: cmd.failureReason,
-        dateTime: block.dateTime,
-      })),
-      zkappCommands: (block.transactions.zkappCommands || []).map(cmd => ({
-        hash: cmd.hash,
-        zkappCommand: {
-          memo: cmd.memo,
-          feePayer: {
-            body: {
-              publicKey: cmd.feePayer,
-              fee: cmd.fee,
-            },
-          },
-          accountUpdates: [],
-        },
-        failureReason: cmd.failureReason ? [cmd.failureReason] : null,
-        dateTime: block.dateTime,
-      })),
-      feeTransfer: (block.transactions.feeTransfer || []).map(ft => ({
-        recipient: ft.recipient,
-        fee: ft.fee,
-        type: ft.type,
-      })),
-      coinbase: block.transactions.coinbase,
-    },
+    transactions,
   };
 }
 
@@ -824,6 +852,11 @@ export async function fetchBlockByHeight(
   const daemonData = await fetchBlockDataFromDaemon(blockHeight);
   if (daemonData) {
     block.transactions = daemonData.transactions;
+    // Recompute the summary from the enriched tables so a BASIC/MINIMAL archive
+    // (no tx-detail extension) no longer shows 0.00 fees above populated tables.
+    const { txFees, snarkFees } = computeBlockFees(block.transactions);
+    block.txFees = txFees;
+    block.snarkFees = snarkFees;
     if (!block.parentHash && daemonData.previousStateHash) {
       block.parentHash = daemonData.previousStateHash;
       block.protocolState.previousStateHash = daemonData.previousStateHash;
