@@ -1127,7 +1127,9 @@ export async function fetchRecentTransactions(
 
     return {
       transactions,
-      blocksScanned: sorted.length,
+      // Clamp defensively: a nonconforming daemon returning more than the
+      // requested window must not inflate the pageable count downstream (#90).
+      blocksScanned: Math.min(sorted.length, MAX_DAEMON_BLOCKS),
       oldestBlockHeight: Math.min(...heights),
       newestBlockHeight: Math.max(...heights),
     };

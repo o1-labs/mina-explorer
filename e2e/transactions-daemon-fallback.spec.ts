@@ -1,4 +1,5 @@
 import { test, expect, isMocked } from './fixtures';
+import type { Page } from '@playwright/test';
 
 /**
  * #90 — on an archive WITHOUT the transaction-details extension, the
@@ -13,10 +14,9 @@ import { test, expect, isMocked } from './fixtures';
  * collapses to a single honest page, and adds a disclosure banner naming the
  * recent-block window.
  *
- * This simulates that archive: every confirmed-transactions query (which
- * selects userCommands) errors as if the schema lacks those fields; the
- * daemon bestChain query supplies the fallback window. Requires the mock
- * harness.
+ * These tests simulate that archive: confirmed-transactions queries (which
+ * select userCommands) error as if the schema lacks those fields; the daemon
+ * bestChain query supplies the fallback window. Requires the mock harness.
  */
 test.describe('transactions daemon fallback pagination (#90)', () => {
   const CHAIN_HEIGHT = 400000;
@@ -30,42 +30,20 @@ test.describe('transactions daemon fallback pagination (#90)', () => {
     }
   };
 
-  test('shows a single honest page and a disclosure, not thousands of fabricated pages', async ({
-    page,
-  }) => {
-    test.skip(!isMocked, 'requires the mock harness (CI or MOCK_API=true)');
+  const NO_EXTENSION_ERROR = JSON.stringify({
+    errors: [{ message: 'Cannot query field "userCommands" on type "Block".' }],
+  });
 
-    // Archive: the confirmed-transactions queries (GetTransactions /
-    // GetTransactionsPaginated, both selecting userCommands) error as if the
-    // tx-detail extension is absent. Everything else falls through to the
-    // standard mocks.
-    await page.route(/archive-node-api/, async route => {
-      const q = getQuery(route.request().postData());
-      if (!q.includes('GetTransactions')) {
-        await route.fallback();
-        return;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          errors: [
-            { message: 'Cannot query field "userCommands" on type "Block".' },
-          ],
-        }),
-      });
-    });
-
-    // Daemon: bestChain serves the small fallback window near the REAL chain
-    // height (400,000). On main this height leaked into the page math as
-    // "Page 1 of 8,000".
+  // Daemon: bestChain serves the small fallback window near the REAL chain
+  // height (400,000). On main this height leaked into the page math as
+  // "Page 1 of 8,000". bestChain returns oldest-first.
+  const routeDaemonBestChain = async (page: Page): Promise<void> => {
     await page.route(/graphql/, async route => {
       const q = getQuery(route.request().postData());
       if (!q.includes('bestChain(maxLength')) {
         await route.fallback();
         return;
       }
-      // bestChain returns oldest-first
       const bestChain = [CHAIN_HEIGHT - 2, CHAIN_HEIGHT - 1, CHAIN_HEIGHT].map(
         (height, i) => ({
           stateHash: `3NKDaemonFallback${height}00000000000000000000000000000`,
@@ -97,6 +75,31 @@ test.describe('transactions daemon fallback pagination (#90)', () => {
         body: JSON.stringify({ data: { bestChain } }),
       });
     });
+  };
+
+  test('shows a single honest page and a disclosure, not thousands of fabricated pages', async ({
+    page,
+  }) => {
+    test.skip(!isMocked, 'requires the mock harness (CI or MOCK_API=true)');
+
+    // Archive: the confirmed-transactions queries (GetTransactions /
+    // GetTransactionsPaginated, both selecting userCommands) error as if the
+    // tx-detail extension is absent. Everything else falls through to the
+    // standard mocks.
+    await page.route(/archive-node-api/, async route => {
+      const q = getQuery(route.request().postData());
+      if (!q.includes('GetTransactions')) {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: NO_EXTENSION_ERROR,
+      });
+    });
+
+    await routeDaemonBestChain(page);
 
     await page.goto('/#/transactions');
 
@@ -121,5 +124,95 @@ test.describe('transactions daemon fallback pagination (#90)', () => {
     await expect(page.getByText(/Page \d+ of/)).toHaveCount(0);
     await expect(page.getByText(/of 8,000/)).toHaveCount(0);
     await expect(page.getByTitle('Next page')).toHaveCount(0);
+  });
+
+  test('snaps to a single honest page when the archive degrades mid-session (page > 1)', async ({
+    page,
+  }) => {
+    test.skip(!isMocked, 'requires the mock harness (CI or MOCK_API=true)');
+
+    // Archive: healthy at first (full history, real chain height), then the
+    // tx-detail extension is "disabled server-side" mid-session — every
+    // confirmed-transactions query starts erroring.
+    let degraded = false;
+    await page.route(/archive-node-api/, async route => {
+      const q = getQuery(route.request().postData());
+      if (!q.includes('GetTransactions')) {
+        await route.fallback();
+        return;
+      }
+      if (degraded) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: NO_EXTENSION_ERROR,
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            blocks: [
+              {
+                blockHeight: CHAIN_HEIGHT,
+                dateTime: '2026-03-01T00:00:00.000Z',
+                transactions: {
+                  userCommands: [
+                    {
+                      hash: 'CkpArchiveHealthyTx10000000000000000000000000000',
+                      kind: 'PAYMENT',
+                      from: B62,
+                      to: B62,
+                      amount: '5000000000',
+                      fee: '200000000',
+                      memo: '',
+                      nonce: 0,
+                      status: 'applied',
+                      failureReason: null,
+                    },
+                  ],
+                  zkappCommands: [],
+                },
+              },
+            ],
+            networkState: {
+              maxBlockHeight: {
+                canonicalMaxBlockHeight: CHAIN_HEIGHT,
+                pendingMaxBlockHeight: CHAIN_HEIGHT,
+              },
+            },
+          },
+        }),
+      });
+    });
+
+    await routeDaemonBestChain(page);
+
+    await page.goto('/#/transactions');
+
+    // Healthy archive: full-history pagination is legitimate here.
+    await expect(page.getByText('Page 1 of 8,000')).toBeVisible({
+      timeout: 20000,
+    });
+
+    // The extension goes away server-side; the user clicks to page 2. The
+    // paginated query now fails and the daemon fallback kicks in — the page
+    // must snap back to a single honest page, not show "Page 2 of 8,000"
+    // over the same fallback window.
+    degraded = true;
+    await page.getByTitle('Next page').click();
+
+    await expect(page.getByText(/30 most recent blocks only/)).toBeVisible({
+      timeout: 20000,
+    });
+    await expect(page.getByText(/Page \d+ of/)).toHaveCount(0);
+    await expect(page.getByTitle('Next page')).toHaveCount(0);
+
+    // The fallback window's transactions are shown.
+    await expect(
+      page.getByRole('link', { name: '399,998' }).first(),
+    ).toBeVisible();
   });
 });

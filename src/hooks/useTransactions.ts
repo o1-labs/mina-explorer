@@ -364,6 +364,16 @@ export function usePaginatedTransactions(
           setHasMore(data.hasMore);
           setIsDaemonFallback(data.source === 'daemon-fallback');
 
+          if (data.source === 'daemon-fallback') {
+            // The archive degraded — possibly mid-session from page > 1.
+            // Only the daemon window is pageable now, so collapse the page
+            // math to it immediately and snap back to page 1; otherwise a
+            // stale "Page 3 of 8,000" would keep re-showing the same
+            // fallback window (#90).
+            setTotalPageableBlocks(data.totalPageableBlocks);
+            setPage(1);
+          }
+
           if (pageNum === 1 || forceRefresh || totalBlockHeight === 0) {
             setTotalBlockHeight(data.totalBlockHeight);
             setTotalPageableBlocks(data.totalPageableBlocks);
