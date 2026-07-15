@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/utils/formatters';
 import { generatePageNumbers } from '@/utils/pagination';
+import { MAX_DAEMON_BLOCKS } from '@/services/api/daemon';
 
 type Tab = 'confirmed' | 'mempool';
 type MempoolTab = 'user' | 'zkapp';
@@ -33,6 +34,7 @@ export function TransactionsPage(): ReactNode {
     loading: confirmedLoading,
     error: confirmedError,
     totalBlockHeight,
+    isDaemonFallback,
     page,
     totalPages,
     goToPage,
@@ -124,6 +126,19 @@ export function TransactionsPage(): ReactNode {
       {/* Confirmed tab */}
       {activeTab === 'confirmed' && (
         <>
+          {/* Daemon-fallback disclosure (#90): the archive on this endpoint
+              doesn't expose transaction fields, so only the daemon's small
+              recent-block window is available — no full history to page. */}
+          {isDaemonFallback && (
+            <div className="rounded-md bg-yellow-500/10 p-4">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                Full transaction history isn&apos;t available on this endpoint.
+                Showing transactions from the {MAX_DAEMON_BLOCKS} most recent
+                blocks only, served by the daemon — older transactions
+                can&apos;t be browsed here.
+              </p>
+            </div>
+          )}
           <TransactionList
             transactions={confirmedTxs}
             loading={confirmedLoading}
