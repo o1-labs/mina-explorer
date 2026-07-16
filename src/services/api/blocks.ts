@@ -1,5 +1,10 @@
-import { getClient, ApiError, type GraphQLClient } from './client';
+import { getClient, type GraphQLClient } from './client';
 import { queryDaemon, isDaemonUnavailableError } from './daemon';
+import {
+  supportsBestChainFilter,
+  isBestChainFilterError,
+  markBestChainFilterUnsupported,
+} from './bestChainFilter';
 import { parseNanomina } from '@/utils/formatters';
 import type {
   BlockSummary,
@@ -8,40 +13,11 @@ import type {
   NetworkState,
 } from '@/types';
 
-// ---------------------------------------------------------------------------
-// Best-chain filtering (issue #86)
-//
-// The archive marks every block's chain status (canonical/pending/orphaned)
-// server-side and exposes it through the `inBestChain` filter on
-// BlockQueryInput (verified live against all four networks; the Block type
-// itself has no chainStatus field). `inBestChain: true` returns canonical
-// blocks plus the pending blocks of the current best chain — excluding
-// orphaned fork blocks. Older archive deployments may not know the filter, so
-// every filtered query degrades to its unfiltered variant (and the old
-// height-based canonicality heuristic) instead of breaking block listing.
-// ---------------------------------------------------------------------------
-
-// Archive endpoints confirmed to reject the inBestChain filter, so later
-// queries skip the filtered attempt instead of paying a failed round trip.
-const bestChainFilterUnsupported = new Set<string>();
-
-function supportsBestChainFilter(client: GraphQLClient): boolean {
-  return !bestChainFilterUnsupported.has(client.getEndpoint());
-}
-
-// A GraphQL validation error for an unknown filter field names the field, so
-// this distinguishes "archive predates inBestChain" from transient failures.
-function isBestChainFilterError(error: unknown): boolean {
-  return error instanceof ApiError && error.message.includes('inBestChain');
-}
-
-function markBestChainFilterUnsupported(client: GraphQLClient): void {
-  console.log(
-    '[API] Archive does not support the inBestChain filter, ' +
-      'falling back to height-based canonicality',
-  );
-  bestChainFilterUnsupported.add(client.getEndpoint());
-}
+// Best-chain filtering (issue #86): block queries filter with
+// `inBestChain: true` so orphaned fork blocks never appear, degrading to the
+// unfiltered variant (and the height-based canonicality heuristic) on
+// archives that predate the filter. The shared support-detection machinery
+// lives in ./bestChainFilter (also used by transaction queries, #97).
 
 // For best-chain blocks the height comparison is exact: everything at or
 // below the canonical root is canonical, the rest is pending. For unfiltered

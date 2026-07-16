@@ -1,5 +1,10 @@
-import { getClient } from './client';
+import { getClient, type GraphQLClient } from './client';
 import { queryDaemon, isCorsError, MAX_DAEMON_BLOCKS } from './daemon';
+import {
+  supportsBestChainFilter,
+  isBestChainFilterError,
+  markBestChainFilterUnsupported,
+} from './bestChainFilter';
 
 export interface PendingTransaction {
   hash: string;
@@ -144,17 +149,12 @@ export interface TransactionDetail {
   accountUpdates?: number;
 }
 
-// Query to search for transactions in recent blocks (full version with zkappCommands)
-const SEARCH_TRANSACTION_QUERY_FULL = `
-  query SearchTransaction($limit: Int!) {
-    blocks(
-      limit: $limit
-      sortBy: BLOCKHEIGHT_DESC
-    ) {
-      blockHeight
-      stateHash
-      dateTime
-      transactions {
+// Field sets for the block-scan transaction search. FULL uses the nested
+// zkApp schema (daemon-style), FLAT the archive's flat zkApp schema
+// (ENABLE_BLOCK_TRANSACTION_DETAILS), BASIC omits zkappCommands entirely.
+type SearchQueryTier = 'FULL' | 'FLAT' | 'BASIC';
+
+const SEARCH_USER_COMMAND_FIELDS = `
         userCommands {
           hash
           kind
@@ -165,7 +165,10 @@ const SEARCH_TRANSACTION_QUERY_FULL = `
           memo
           nonce
           failureReason
-        }
+        }`;
+
+const SEARCH_TRANSACTION_FIELDS: Record<SearchQueryTier, string> = {
+  FULL: `${SEARCH_USER_COMMAND_FIELDS}
         zkappCommands {
           hash
           failureReasons {
@@ -185,34 +188,8 @@ const SEARCH_TRANSACTION_QUERY_FULL = `
               }
             }
           }
-        }
-      }
-    }
-  }
-`;
-
-// Fallback query with flat zkApp schema (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
-const SEARCH_TRANSACTION_QUERY_FLAT = `
-  query SearchTransactionFlat($limit: Int!) {
-    blocks(
-      limit: $limit
-      sortBy: BLOCKHEIGHT_DESC
-    ) {
-      blockHeight
-      stateHash
-      dateTime
-      transactions {
-        userCommands {
-          hash
-          kind
-          from
-          to
-          amount
-          fee
-          memo
-          nonce
-          failureReason
-        }
+        }`,
+  FLAT: `${SEARCH_USER_COMMAND_FIELDS}
         zkappCommands {
           hash
           feePayer
@@ -220,38 +197,54 @@ const SEARCH_TRANSACTION_QUERY_FLAT = `
           memo
           status
           failureReason
-        }
-      }
-    }
-  }
-`;
+        }`,
+  BASIC: SEARCH_USER_COMMAND_FIELDS,
+};
 
-// Last-resort query without zkappCommands (for endpoints without transaction details)
-const SEARCH_TRANSACTION_QUERY_BASIC = `
-  query SearchTransactionBasic($limit: Int!) {
+const SEARCH_QUERY_NAMES: Record<SearchQueryTier, string> = {
+  FULL: 'SearchTransaction',
+  FLAT: 'SearchTransactionFlat',
+  BASIC: 'SearchTransactionBasic',
+};
+
+// Build a block-scan search query, optionally filtered to the best chain so
+// transactions that exist only in orphaned fork blocks are excluded (#97).
+function buildSearchTransactionQuery(
+  tier: SearchQueryTier,
+  bestChainOnly: boolean,
+): string {
+  const queryArg = bestChainOnly ? 'query: { inBestChain: true }\n      ' : '';
+  const name = `${SEARCH_QUERY_NAMES[tier]}${bestChainOnly ? 'BestChain' : ''}`;
+  return `
+  query ${name}($limit: Int!) {
     blocks(
-      limit: $limit
+      ${queryArg}limit: $limit
       sortBy: BLOCKHEIGHT_DESC
     ) {
       blockHeight
       stateHash
       dateTime
-      transactions {
-        userCommands {
-          hash
-          kind
-          from
-          to
-          amount
-          fee
-          memo
-          nonce
-          failureReason
-        }
+      transactions {${SEARCH_TRANSACTION_FIELDS[tier]}
       }
     }
   }
 `;
+}
+
+// Unfiltered variants (also used by the account-history scan; best-chain
+// filtering for account history is tracked as a follow-up to #97/#101).
+const SEARCH_TRANSACTION_QUERY_FULL = buildSearchTransactionQuery(
+  'FULL',
+  false,
+);
+const SEARCH_TRANSACTION_QUERY_FLAT = buildSearchTransactionQuery(
+  'FLAT',
+  false,
+);
+const SEARCH_TRANSACTION_QUERY_BASIC = buildSearchTransactionQuery(
+  'BASIC',
+  false,
+);
 
 interface SearchTransactionResponse {
   blocks: Array<{
@@ -472,52 +465,80 @@ export async function fetchTransactionByHash(
     return null;
   };
 
-  // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps)
-  // Try nested query first (works for daemon endpoints)
-  try {
-    const data = await client.query<SearchTransactionResponse>(
-      SEARCH_TRANSACTION_QUERY_FULL,
-      { limit: 1000 },
-    );
-    const result = searchBlocks(data);
-    if (result) return result;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '';
-    if (
-      errorMessage.includes('zkappCommands') ||
-      errorMessage.includes('Cannot query field')
-    ) {
-      // Nested schema not supported — skip to flat and basic below
-    } else {
-      console.error('[API] Error searching for transaction:', error);
+  // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps).
+  // With bestChainOnly, a filter validation error aborts the chain (every
+  // filtered tier fails identically) so the caller can degrade; any other
+  // error falls through to the next tier as before.
+  const searchConfirmedBlocks = async (
+    bestChainOnly: boolean,
+  ): Promise<TransactionDetail | null> => {
+    // Try nested query first (works for daemon endpoints)
+    try {
+      const data = await client.query<SearchTransactionResponse>(
+        buildSearchTransactionQuery('FULL', bestChainOnly),
+        { limit: 1000 },
+      );
+      const result = searchBlocks(data);
+      if (result) return result;
+    } catch (error) {
+      if (bestChainOnly && isBestChainFilterError(error)) throw error;
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (
+        errorMessage.includes('zkappCommands') ||
+        errorMessage.includes('Cannot query field')
+      ) {
+        // Nested schema not supported — skip to flat and basic below
+      } else {
+        console.error('[API] Error searching for transaction:', error);
+      }
+    }
+
+    // Try flat query (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
+    try {
+      const data = await client.query<SearchTransactionFlatResponse>(
+        buildSearchTransactionQuery('FLAT', bestChainOnly),
+        { limit: 1000 },
+      );
+      const result = searchBlocksFlat(data);
+      if (result) return result;
+    } catch (error) {
+      if (bestChainOnly && isBestChainFilterError(error)) throw error;
+      // Flat query failed — try basic (no zkApp data)
+    }
+
+    // Last resort: basic query (no zkappCommands at all)
+    try {
+      const data = await client.query<SearchTransactionResponse>(
+        buildSearchTransactionQuery('BASIC', bestChainOnly),
+        { limit: 1000 },
+      );
+      const result = searchBlocks(data);
+      if (result) return result;
+    } catch (basicError) {
+      if (bestChainOnly && isBestChainFilterError(basicError)) {
+        throw basicError;
+      }
+      console.error('[API] Error with basic transaction search:', basicError);
+    }
+
+    return null;
+  };
+
+  // Scan best-chain blocks only (#97): a transaction found this way is in the
+  // best chain by construction, so its 'confirmed' status cannot be
+  // contradicted by an orphaned fork inclusion — and a transaction that only
+  // exists in an orphaned block is correctly reported as not found instead of
+  // confirmed. Archives that predate the filter degrade to the previous
+  // unfiltered scan.
+  if (supportsBestChainFilter(client)) {
+    try {
+      return await searchConfirmedBlocks(true);
+    } catch (filterError) {
+      if (!isBestChainFilterError(filterError)) throw filterError;
+      markBestChainFilterUnsupported(client);
     }
   }
-
-  // Try flat query (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
-  try {
-    const data = await client.query<SearchTransactionFlatResponse>(
-      SEARCH_TRANSACTION_QUERY_FLAT,
-      { limit: 1000 },
-    );
-    const result = searchBlocksFlat(data);
-    if (result) return result;
-  } catch {
-    // Flat query failed — try basic (no zkApp data)
-  }
-
-  // Last resort: basic query (no zkappCommands at all)
-  try {
-    const data = await client.query<SearchTransactionResponse>(
-      SEARCH_TRANSACTION_QUERY_BASIC,
-      { limit: 1000 },
-    );
-    const result = searchBlocks(data);
-    if (result) return result;
-  } catch (basicError) {
-    console.error('[API] Error with basic transaction search:', basicError);
-  }
-
-  return null;
+  return searchConfirmedBlocks(false);
 }
 
 // The account history only scans this many of the most recent blocks. The
@@ -756,13 +777,10 @@ export interface TransactionsPageResult {
   source: 'archive' | 'daemon-fallback';
 }
 
-// Archive queries for confirmed transactions (requires Archive-Node-API PR 148+)
-const TRANSACTIONS_ARCHIVE_QUERY = `
-  query GetTransactions($limit: Int!) {
-    blocks(
-      limit: $limit
-      sortBy: BLOCKHEIGHT_DESC
-    ) {
+// Archive queries for confirmed transactions (requires Archive-Node-API PR
+// 148+). Filtered variants add `inBestChain: true` so transactions that only
+// exist in orphaned fork blocks never appear as confirmed (#97).
+const TRANSACTIONS_ARCHIVE_FIELDS = `
       blockHeight
       dateTime
       transactions {
@@ -786,48 +804,30 @@ const TRANSACTIONS_ARCHIVE_QUERY = `
           status
           failureReason
         }
-      }
-    }
-    networkState {
-      maxBlockHeight {
-        canonicalMaxBlockHeight
-        pendingMaxBlockHeight
-      }
-    }
-  }
-`;
+      }`;
 
-const TRANSACTIONS_ARCHIVE_QUERY_PAGINATED = `
-  query GetTransactionsPaginated($limit: Int!, $maxBlockHeight: Int!) {
+function buildTransactionsArchiveQuery(
+  paginated: boolean,
+  bestChainOnly: boolean,
+): string {
+  const params = paginated
+    ? '($limit: Int!, $maxBlockHeight: Int!)'
+    : '($limit: Int!)';
+  const filters = [
+    ...(paginated ? ['blockHeight_lt: $maxBlockHeight'] : []),
+    ...(bestChainOnly ? ['inBestChain: true'] : []),
+  ];
+  const queryArg =
+    filters.length > 0 ? `query: { ${filters.join(', ')} }\n      ` : '';
+  const name = `GetTransactions${paginated ? 'Paginated' : ''}${
+    bestChainOnly ? 'BestChain' : ''
+  }`;
+  return `
+  query ${name}${params} {
     blocks(
-      query: { blockHeight_lt: $maxBlockHeight }
-      limit: $limit
+      ${queryArg}limit: $limit
       sortBy: BLOCKHEIGHT_DESC
-    ) {
-      blockHeight
-      dateTime
-      transactions {
-        userCommands {
-          hash
-          kind
-          from
-          to
-          amount
-          fee
-          memo
-          nonce
-          status
-          failureReason
-        }
-        zkappCommands {
-          hash
-          feePayer
-          fee
-          memo
-          status
-          failureReason
-        }
-      }
+    ) {${TRANSACTIONS_ARCHIVE_FIELDS}
     }
     networkState {
       maxBlockHeight {
@@ -837,6 +837,7 @@ const TRANSACTIONS_ARCHIVE_QUERY_PAGINATED = `
     }
   }
 `;
+}
 
 interface ArchiveTransactionBlock {
   blockHeight: number;
@@ -916,6 +917,32 @@ function flattenArchiveBlocks(
   return txs;
 }
 
+// Query one page of confirmed transactions, filtered to best-chain blocks so
+// orphaned fork transactions are excluded (#97). Reuses the #86 degradation
+// machinery: archives that reject the inBestChain filter get the unfiltered
+// query (previous behavior) and are cached as filter-unsupported.
+async function queryTransactionsArchive(
+  client: GraphQLClient,
+  paginated: boolean,
+  variables: Record<string, unknown>,
+): Promise<ArchiveTransactionsResponse> {
+  if (supportsBestChainFilter(client)) {
+    try {
+      return await client.query<ArchiveTransactionsResponse>(
+        buildTransactionsArchiveQuery(paginated, true),
+        variables,
+      );
+    } catch (error) {
+      if (!isBestChainFilterError(error)) throw error;
+      markBestChainFilterUnsupported(client);
+    }
+  }
+  return client.query<ArchiveTransactionsResponse>(
+    buildTransactionsArchiveQuery(paginated, false),
+    variables,
+  );
+}
+
 export async function fetchTransactionsPaginated(
   blocksPerPage: number = 50,
   beforeHeight?: number,
@@ -923,16 +950,14 @@ export async function fetchTransactionsPaginated(
   const client = getClient();
 
   try {
-    const query = beforeHeight
-      ? TRANSACTIONS_ARCHIVE_QUERY_PAGINATED
-      : TRANSACTIONS_ARCHIVE_QUERY;
     const variables: Record<string, unknown> = { limit: blocksPerPage };
     if (beforeHeight) {
       variables.maxBlockHeight = beforeHeight;
     }
 
-    const data = await client.query<ArchiveTransactionsResponse>(
-      query,
+    const data = await queryTransactionsArchive(
+      client,
+      Boolean(beforeHeight),
       variables,
     );
     const totalHeight = data.networkState.maxBlockHeight.pendingMaxBlockHeight;
