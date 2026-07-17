@@ -64,6 +64,14 @@ const COMPILED_NETWORKS: Record<string, NetworkConfig> = {
     daemonEndpoint: 'https://plain-1-graphql.mesa-mut.minaprotocol.com/graphql',
     isTestnet: true,
   },
+  'mesa-rc': {
+    id: 'mesa-rc',
+    name: 'mesa-rc',
+    displayName: 'Mesa Testnet RC',
+    archiveEndpoint: 'https://archive-node-api.mesa-rc.minaprotocol.com',
+    daemonEndpoint: 'https://plain-1-graphql.mesa-rc.minaprotocol.com/graphql',
+    isTestnet: true,
+  },
   devnet: {
     id: 'devnet',
     name: 'devnet',
