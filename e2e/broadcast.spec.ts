@@ -1,6 +1,13 @@
 import { test, expect, FIXTURES } from './fixtures';
 
-// Cryptographically valid payment with field/scalar signature (for validation tests)
+// Cryptographically valid payment with field/scalar signature (for validation tests).
+//
+// Signed for the TESTNET network id. mina-signer mixes the network into the
+// signature, so `verify.ts` picks 'mainnet' or 'testnet' from the active network
+// and this payload verifies only on a testnet. The two tests that expect
+// "Signature is valid" therefore pin `?network=devnet` — they used to rely on the
+// default network being a testnet, which stopped being true when mesa was
+// decommissioned and mainnet became the default.
 const VERIFIABLE_PAYMENT_JSON = JSON.stringify({
   input: {
     to: 'B62qqL54NrFkuiBf3YQHm6g5VAP7qgC3PRiJRGoiAf4sMR1Liu2Z99U',
@@ -230,7 +237,7 @@ test.describe('Broadcast Transaction', () => {
   });
 
   test('validates payment with field/scalar signature', async ({ page }) => {
-    await page.goto('/#/broadcast');
+    await page.goto('/#/broadcast?network=devnet');
 
     await page.locator('textarea').fill(VERIFIABLE_PAYMENT_JSON);
     await page
@@ -286,7 +293,7 @@ test.describe('Broadcast Transaction', () => {
   });
 
   test('validate does not broadcast', async ({ page }) => {
-    await page.goto('/#/broadcast');
+    await page.goto('/#/broadcast?network=devnet');
 
     await page.locator('textarea').fill(VERIFIABLE_PAYMENT_JSON);
     await page

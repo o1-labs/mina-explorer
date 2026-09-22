@@ -8,7 +8,7 @@ import { test, expect, FIXTURES, isMocked } from './fixtures';
  */
 
 test.describe('Network Endpoints Integration', () => {
-  test.describe('Mesa Network', () => {
+  test.describe('Default Network (Mainnet)', () => {
     test.beforeEach(async ({ page }) => {
       // Clear localStorage to ensure fresh state
       await page.goto('/');
@@ -30,7 +30,7 @@ test.describe('Network Endpoints Integration', () => {
 
       const rowCount = await tableRows.count();
       expect(rowCount).toBeGreaterThan(0);
-      console.log('[Mesa] Archive endpoint loaded', rowCount, 'blocks');
+      console.log('[Mainnet] Archive endpoint loaded', rowCount, 'blocks');
     });
 
     test('daemon endpoint loads account data', async ({ page }) => {
@@ -52,10 +52,10 @@ test.describe('Network Endpoints Integration', () => {
       if (await balanceText.isVisible()) {
         // Check for MINA amount (balance should show MINA)
         await expect(page.locator('text=/MINA/').first()).toBeVisible();
-        console.log('[Mesa] Daemon endpoint loaded account successfully');
+        console.log('[Mainnet] Daemon endpoint loaded account successfully');
       } else {
         console.log(
-          '[Mesa] Daemon endpoint blocked (CORS), expected in browser',
+          '[Mainnet] Daemon endpoint blocked (CORS), expected in browser',
         );
       }
     });
@@ -69,7 +69,7 @@ test.describe('Network Endpoints Integration', () => {
       });
       const tableRows = page.locator('tbody tr');
       await expect(tableRows.first()).toBeVisible({ timeout: 15000 });
-      console.log('[Mesa] Archive endpoint: blocks loaded');
+      console.log('[Mainnet] Archive endpoint: blocks loaded');
 
       // Step 2: Navigate to account page (daemon endpoint)
       await page.goto(`/#/account/${FIXTURES.accounts.blockProducer}`);
@@ -81,7 +81,7 @@ test.describe('Network Endpoints Integration', () => {
         .locator('text=/error|failed|not found|Unable|daemon|CORS/i')
         .first();
       await expect(balanceText.or(errorText)).toBeVisible({ timeout: 20000 });
-      console.log('[Mesa] Daemon endpoint: account page loaded');
+      console.log('[Mainnet] Daemon endpoint: account page loaded');
 
       // Step 3: Navigate back to home (archive endpoint should still work)
       await page.goto('/');
@@ -90,16 +90,18 @@ test.describe('Network Endpoints Integration', () => {
       });
       await expect(tableRows.first()).toBeVisible({ timeout: 15000 });
       console.log(
-        '[Mesa] Archive endpoint: blocks still working after account lookup',
+        '[Mainnet] Archive endpoint: blocks still working after account lookup',
       );
     });
   });
 
   test.describe('Network Switching with Both Endpoints', () => {
     test('switching to Mainnet uses correct endpoints', async ({ page }) => {
-      await page.goto('/');
+      // Start on Devnet, not the default — Mainnet IS the default now, so
+      // landing there and "switching" to it would exercise nothing.
+      await page.goto('/#/?network=devnet');
 
-      // Wait for initial data to load (Mesa)
+      // Wait for initial data to load (Devnet)
       await expect(page.locator('text=Recent Blocks').first()).toBeVisible({
         timeout: 15000,
       });
@@ -107,7 +109,7 @@ test.describe('Network Endpoints Integration', () => {
       // Switch to Mainnet
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -153,7 +155,7 @@ test.describe('Network Endpoints Integration', () => {
       // Switch to Devnet
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Devnet")').first().click();
@@ -185,24 +187,24 @@ test.describe('Network Endpoints Integration', () => {
       // Skip in mocked mode - same fixture data for all networks
       test.skip(isMocked, 'Uses same fixture for all networks');
 
-      await page.goto('/');
+      await page.goto('/#/?network=devnet');
 
-      // Start with Mesa - load blocks
+      // Start with Devnet - load blocks
       await expect(page.locator('text=Recent Blocks').first()).toBeVisible({
         timeout: 15000,
       });
       const tableRows = page.locator('tbody tr');
       await expect(tableRows.first()).toBeVisible({ timeout: 15000 });
 
-      // Get Mesa block height
-      const mesaBlockLink = tableRows.first().locator('a').first();
-      const mesaBlockHeight = await mesaBlockLink.textContent();
-      console.log('Mesa block height:', mesaBlockHeight);
+      // Get Devnet block height
+      const devnetBlockLink = tableRows.first().locator('a').first();
+      const devnetBlockHeight = await devnetBlockLink.textContent();
+      console.log('Devnet block height:', devnetBlockHeight);
 
       // Switch to Mainnet
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -215,21 +217,28 @@ test.describe('Network Endpoints Integration', () => {
       // Wait for Mainnet blocks to load
       await expect(tableRows.first()).toBeVisible({ timeout: 15000 });
 
-      // Get Mainnet block height - should be different from Mesa
+      // Get Mainnet block height - should be different from Devnet
       const mainnetBlockLink = tableRows.first().locator('a').first();
       const mainnetBlockHeight = await mainnetBlockLink.textContent();
       console.log('Mainnet block height:', mainnetBlockHeight);
 
-      // Mainnet should have significantly higher block height than Mesa testnet
-      const mesaHeight = parseInt(mesaBlockHeight?.replace(/,/g, '') || '0');
+      const devnetHeight = parseInt(
+        devnetBlockHeight?.replace(/,/g, '') || '0',
+      );
       const mainnetHeight = parseInt(
         mainnetBlockHeight?.replace(/,/g, '') || '0',
       );
 
-      // Mainnet block height should be much higher (400k+)
-      expect(mainnetHeight).toBeGreaterThan(mesaHeight);
+      // Asserted as DIFFERENT, not ordered. The old test could demand mainnet
+      // be the taller chain because the other side was a short-lived testnet;
+      // devnet and mainnet are both long-running and their tips are not in any
+      // guaranteed order. Different heights is the actual contract — it proves
+      // the switch re-pointed the archive rather than re-rendering stale data.
+      expect(mainnetHeight).toBeGreaterThan(0);
+      expect(devnetHeight).toBeGreaterThan(0);
+      expect(mainnetHeight).not.toBe(devnetHeight);
       console.log(
-        `Verified: Mainnet height (${mainnetHeight}) > Mesa height (${mesaHeight})`,
+        `Verified: Mainnet height (${mainnetHeight}) !== Devnet height (${devnetHeight})`,
       );
     });
   });
@@ -242,7 +251,7 @@ test.describe('Network Endpoints Integration', () => {
       await page.goto('/');
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -275,7 +284,7 @@ test.describe('Network Endpoints Integration', () => {
       await page.goto('/');
       const networkButton = page
         .locator('header button')
-        .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+        .filter({ hasText: /Devnet|Mainnet/ })
         .first();
       await networkButton.click();
       await page.locator('button:has-text("Mainnet")').first().click();
@@ -329,7 +338,7 @@ test.describe('Deployed Website Tests', () => {
     // Switch to Mainnet
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
     await page.locator('button:has-text("Mainnet")').first().click();
@@ -353,7 +362,7 @@ test.describe('Deployed Website Tests', () => {
     // Switch to Mainnet first
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await expect(networkButton).toBeVisible({ timeout: 15000 });
     await networkButton.click();

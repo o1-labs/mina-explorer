@@ -470,8 +470,9 @@ export interface BlocksPage {
    * RENAMED from `totalBlockHeight`, because that name described the archive's
    * APPROXIMATION rather than the quantity: with no row count available, the archive path
    * substitutes the tip height, which only equals a block count on a chain whose archive
-   * starts at height 1. On mesa the archive starts near 295 635, so the old name carried
-   * 312 511 into a field the UI renders as "total blocks" and divides to get a page count.
+   * starts at height 1. On mesa (a testnet since retired) the archive started near
+   * 295 635, so the old name carried 312 511 into a field the UI renders as "total blocks"
+   * and divides to get a page count.
    * The REST path supplies the real count (`totalCount`), so keeping a height-shaped name
    * would have been the same unit confusion that made a 720 MINA coinbase render as
    * 0.00000072.

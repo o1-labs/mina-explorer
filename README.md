@@ -1,6 +1,6 @@
 # Mina Explorer
 
-A blockchain explorer for the [Mina Protocol](https://minaprotocol.com) network. Browse blocks, transactions, accounts, staking, zkApps, and network analytics across mainnet, devnet, and Mesa Trail.
+A blockchain explorer for the [Mina Protocol](https://minaprotocol.com) network. Browse blocks, transactions, accounts, staking, zkApps, and network analytics across mainnet and devnet.
 
 **Live:** [o1-labs.github.io/mina-explorer](https://o1-labs.github.io/mina-explorer/)
 
@@ -14,7 +14,7 @@ A blockchain explorer for the [Mina Protocol](https://minaprotocol.com) network.
 - **Staking** — block producer rankings by time period
 - **zkApps** — recent zkApp command activity
 - **Analytics** — network stats, block production, transaction volume, and daily summaries
-- **Multi-network** — switch between mainnet, devnet, and Mesa Trail with a single click
+- **Multi-network** — switch between mainnet and devnet with a single click
 - **Search** — look up blocks (by height or state hash), transactions, and accounts
 - **Dark mode** — system-aware with manual toggle
 - **Mobile responsive** — full functionality on all viewport sizes
@@ -97,7 +97,6 @@ src/
 |---------|---------|--------|
 | **Mainnet** | `archive-node-api.gcp.o1test.net` | `mainnet-plain-1.gcp.o1test.net/graphql` |
 | **Devnet** | `devnet-archive-node-api.gcp.o1test.net` | `devnet-plain-1.gcp.o1test.net/graphql` |
-| **Mesa Trail** | `archive-node-api.mesa-rc.minaprotocol.com` | `plain-1-graphql.mesa-rc.minaprotocol.com/graphql` |
 
 ## Tech Stack
 
@@ -149,7 +148,7 @@ Open <http://localhost:8080>.
 
 ### Override the network endpoints at runtime
 
-The compiled-in defaults point at the three o1-labs networks (mainnet, devnet, mesa). To self-host against your own archive node, set `MINA_EXPLORER_NETWORKS` (a JSON object merged over the defaults) and optionally `MINA_EXPLORER_DEFAULT_NETWORK`:
+The compiled-in defaults point at the two o1-labs networks (mainnet, devnet). To self-host against your own archive node, set `MINA_EXPLORER_NETWORKS` (a JSON object merged over the defaults) and optionally `MINA_EXPLORER_DEFAULT_NETWORK`:
 
 ```bash
 docker run --rm -p 8080:8080 \

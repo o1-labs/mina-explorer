@@ -24,13 +24,21 @@
  * - Abuse is bounded by the API key's own per-minute limit, which is a global cap precisely
  *   because nobody but the proxy holds the key, plus caching at the proxy.
  *
- * `restEndpoint` includes the network path segment (e.g. `.../mina-mesa`) rather than being
- * a bare host, so there is no second id-mapping table to keep in sync with `networks.ts` —
- * this app's ids (`mesa`, `devnet`, `mainnet`) are not the API's (`mina-mesa`, `mina-devnet`,
+ * `restEndpoint` includes the network path segment (e.g. `.../mina-devnet`) rather than
+ * being a bare host, so there is no second id-mapping table to keep in sync with
+ * `networks.ts` — this app's ids (`devnet`, `mainnet`) are not the API's (`mina-devnet`,
  * `mina-mainnet`), and a mapping table is a thing that goes stale silently.
  *
  * The endpoint is held in a module-level singleton set from NetworkContext, mirroring
  * `daemon.ts` exactly — see the note at daemon.ts:3-12 for why that is deliberate (#88).
+ *
+ * ## A note on the measurements below
+ *
+ * Several comments in this file cite figures measured on **mesa**, a testnet that has since
+ * been decommissioned and removed from `networks.ts`. They are kept because they are the
+ * worked examples that explain why this code is shaped as it is — a short chain whose
+ * archive did not start at height 1 is exactly the case the naive arithmetic gets wrong.
+ * They are historical evidence, not reproducible against any network this app still lists.
  */
 
 import { ApiError } from './client';
@@ -110,7 +118,7 @@ export const REST_MAX_PAGE_SIZE = 50;
  *
  * | network | `ALL` | `CANONICAL` | `ORPHANED` |
  * |---|---|---|---|
- * | mesa | 17 130 | 15 777 | 1 353 |
+ * | mesa (retired) | 17 130 | 15 777 | 1 353 |
  * | mainnet | 547 728 | 546 456 | 1 272 |
  *
  * `CANONICAL + ORPHANED === ALL` on both, exactly. That matters for paging: `totalCount`
@@ -157,8 +165,9 @@ interface RestBlockListItem {
  *   parity artefact, not a count.
  * - **`totalPages`** derives from the capped `totalElements`, so it reports 400 pages of 25
  *   regardless of how much data exists.
- * - **`last`** derives from the same cap: `page=399&size=25` answers `"last": true` on mesa
- *   with 286 further pages of real rows behind it. It is not read here, and must not be.
+ * - **`last`** derives from the same cap: `page=399&size=25` answered `"last": true` on
+ *   mesa with 286 further pages of real rows behind it. It is not read here, and must not
+ *   be.
  *
  * Measured on mesa: `totalCount` 16 876 (675 pages of 25) against `totalPages` 400. Paging
  * past the cap works fine — page 500 returns real rows, page 674 returns 25, page 675
@@ -243,12 +252,12 @@ export function mapRestBlockToSummary(item: RestBlockListItem): BlockSummary {
  * archive:
  *
  * - `ALL` is **everything the API has**, live tip included — orphaned siblings INCLUDED.
- *   Measured on mesa: one 50-row page spans only 41 distinct heights, so eight heights
- *   carry a fork sibling. (An earlier revision of this comment claimed orphans were not
+ *   Measured on mesa: one 50-row page spanned only 41 distinct heights, so eight heights
+ *   carried a fork sibling. (An earlier revision of this comment claimed orphans were not
  *   in `ALL`. They are; see `BLOCK_FILTERS` for the measurements.)
  * - `CANONICAL` is the **k-FINALIZED** prefix (`blockHeight <= canonicalMaxBlockHeight`).
  *   k is 290 blocks on Mina, so this list *starts* 290 blocks below the tip. Measured
- *   against production: 14 h behind on mesa, 13 h on devnet, **35 h behind on mainnet**.
+ *   against production: 13 h behind on devnet, **35 h behind on mainnet** (14 h on mesa).
  *   As the front page's "latest blocks" that is the wrong list, and wrong in the quiet
  *   way — every row real and correctly rendered, the whole page just a day and a half
  *   stale. This shipped as `CANONICAL` and was caught before any network was flipped on.
@@ -303,9 +312,9 @@ export interface RestBlocksPage {
  * arithmetic silently assumes **heights start at 1 and are dense**, and treats the tip
  * height as a count of blocks.
  *
- * On mesa neither holds. Its archive starts around height 295 635, so:
+ * On mesa neither held. Its archive started around height 295 635, so:
  *
- * | | mesa |
+ * | | mesa (retired) |
  * |---|---|
  * | tip height | 312 511 |
  * | actual blocks (`totalCount`) | 16 876 |
@@ -420,7 +429,7 @@ function toBlocksPage(
  *   it. Measured on mesa, 50 rows spanned 41 heights; near the mainnet tip, 50 rows spanned
  *   33. Subtraction under-shoots by one row per orphan passed.
  * - Under `canonical`/`orphaned` the retained window does not start at height 1 (mesa's
- *   starts around 296 000), and `orphaned` is sparse to the point of being unrelated to
+ *   started around 296 000), and `orphaned` is sparse to the point of being unrelated to
  *   height at all.
  *
  * So probe instead. The list is sorted by height descending, hence monotone non-increasing
@@ -435,7 +444,7 @@ function toBlocksPage(
  * |---|---|---|---|
  * | mainnet h=100 000 `canonical` | 5 | 446 460 | 446 746 ✗ |
  * | mainnet h=400 000 `all` | 6 | 147 736 | 146 746 ✗ |
- * | mesa h=300 000 `canonical` | 7 | 12 438 | 12 712 ✗ |
+ * | mesa (retired) h=300 000 `canonical` | 7 | 12 438 | 12 712 ✗ |
  * | devnet h=545 169 `all` (forked height) | 17 | 6 212 | 4 291 ✗ |
  * | mainnet h=300 000 `orphaned` (absent) | 2 | — `found: false` | — |
  *

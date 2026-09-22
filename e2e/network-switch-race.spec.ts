@@ -10,9 +10,9 @@ import { test, expect, isMocked, FIXTURE_DATA } from './fixtures';
  * explorer, one network's blocks shown under another network's label. The fix
  * is a per-hook request generation guard that discards superseded responses.
  *
- * Here network A (mesa) is deliberately slow and network B (devnet) is instant,
- * with disjoint block heights, so the stale A response lands *after* the switch.
- * Requires the mock harness.
+ * Here network A (mainnet) is deliberately slow and network B (devnet) is
+ * instant, with disjoint block heights, so the stale A response lands *after*
+ * the switch. Requires the mock harness.
  */
 test.describe('network switch race (#66)', () => {
   // Both networks report the SAME max block height so that the stale response's
@@ -43,10 +43,10 @@ test.describe('network switch race (#66)', () => {
   /**
    * The same marked blocks in mina-explorer-api's DTO shape.
    *
-   * Mesa reads the REST backend now, so THIS race is cross-backend: mesa over REST against
-   * devnet over the archive. That is a better test of the guard than the original, which
-   * raced two archives — the generation guard has to hold regardless of which client
-   * dispatched the superseded request.
+   * Both networks read the REST backend, so both sides of the race go through one shared
+   * client whose endpoint is swapped in place — the original #66 scenario, rather than two
+   * independent archive clients. The generation guard has to hold regardless of which
+   * client dispatched the superseded request.
    *
    * `totalCount` stays SHARED_MAX_HEIGHT for the reason the constant exists: an equal total
    * keeps the stale response's setTotalBlocks a no-op, so the two responses differ only in
@@ -81,10 +81,10 @@ test.describe('network switch race (#66)', () => {
   }) => {
     test.skip(!isMocked, 'requires the mock harness (CI or MOCK_API=true)');
 
-    const MESA_BASE = 800000; // slow network → heights 800,00x
+    const MAINNET_BASE = 800000; // slow network → heights 800,00x
     const DEVNET_BASE = 900000; // fast network → heights 900,00x
-    let mesaBlocksRequested = false;
-    let mesaBlocksFulfilled = false;
+    let mainnetBlocksRequested = false;
+    let mainnetBlocksFulfilled = false;
 
     // The blocks-list query is named GetBlocksFull/Basic/Minimal/Paginated
     // (all carry per-block userCommands summaries, so match by name, not by
@@ -98,22 +98,21 @@ test.describe('network switch race (#66)', () => {
       }
     };
 
-    // Mesa now reads mina-explorer-api, so the slow side is the REST backend, matched on
+    // Mainnet reads mina-explorer-api, so the slow side is the REST backend, matched on
     // its path shape rather than a GraphQL query name.
-    await page.route(/\/mina-mesa\/v1\/blocks/, async route => {
-      mesaBlocksRequested = true;
+    await page.route(/\/mina-mainnet\/v1\/blocks/, async route => {
+      mainnetBlocksRequested = true;
       await new Promise(resolve => setTimeout(resolve, 1500));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(markedRestBlocks(MESA_BASE)),
+        body: JSON.stringify(markedRestBlocks(MAINNET_BASE)),
       });
-      mesaBlocksFulfilled = true;
+      mainnetBlocksFulfilled = true;
     });
 
-    // Devnet reads mina-explorer-api too now, so BOTH sides of the race are REST. That is
-    // the original #66 scenario restored: one shared client whose endpoint is swapped in
-    // place, rather than two independent archive clients. The fast side answers instantly.
+    // Devnet reads mina-explorer-api too, so BOTH sides of the race are REST: one shared
+    // client whose endpoint is swapped in place. The fast side answers instantly.
     await page.route(/\/mina-devnet\/v1\/blocks/, async route => {
       await route.fulfill({
         status: 200,
@@ -122,17 +121,19 @@ test.describe('network switch race (#66)', () => {
       });
     });
 
-    // Start on mesa; the blocks request is now in flight (and slow).
-    await page.goto('/#/blocks?network=mesa');
+    // Start on mainnet; the blocks request is now in flight (and slow).
+    await page.goto('/#/blocks?network=mainnet');
     await expect(
-      page.locator('header button').filter({ hasText: 'Mesa' }).first(),
+      page.locator('header button').filter({ hasText: 'Mainnet' }).first(),
     ).toBeVisible({ timeout: 10000 });
-    await expect.poll(() => mesaBlocksRequested, { timeout: 10000 }).toBe(true);
+    await expect
+      .poll(() => mainnetBlocksRequested, { timeout: 10000 })
+      .toBe(true);
 
-    // Switch to devnet before mesa resolves.
+    // Switch to devnet before mainnet resolves.
     await page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first()
       .click();
     await page.locator('button:has-text("Devnet")').first().click();
@@ -142,13 +143,15 @@ test.describe('network switch race (#66)', () => {
       timeout: 10000,
     });
 
-    // Wait until the stale mesa response has actually been delivered to the app
-    // (its 1500ms delay elapsed), then give the app a moment to (incorrectly)
-    // apply it if the guard were absent...
-    await expect.poll(() => mesaBlocksFulfilled, { timeout: 5000 }).toBe(true);
+    // Wait until the stale mainnet response has actually been delivered to the
+    // app (its 1500ms delay elapsed), then give the app a moment to
+    // (incorrectly) apply it if the guard were absent...
+    await expect
+      .poll(() => mainnetBlocksFulfilled, { timeout: 5000 })
+      .toBe(true);
     await page.waitForTimeout(500);
 
-    // ...the guard must have discarded it: mesa heights never appear and the
+    // ...the guard must have discarded it: mainnet heights never appear and the
     // devnet data is still on screen under the devnet label.
     await expect(page.getByText(/800,00\d/)).toHaveCount(0);
     await expect(page.getByText(/900,00\d/).first()).toBeVisible();

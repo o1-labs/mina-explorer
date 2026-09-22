@@ -242,8 +242,8 @@ export function usePaginatedBlocks(
    *
    * - `key` identifies the LIST (network, page size, filter). When it changes the page
    *   resets, because a page number means nothing against a different list — and the REST
-   *   `totalCount` really is different per filter (mesa: 17 130 for `all`, 15 777 for
-   *   `canonical`).
+   *   `totalCount` really is different per filter (measured on mesa, since retired:
+   *   17 130 for `all`, 15 777 for `canonical`).
    * - `shift` moves the page grid so a jumped-to height can sit mid-page — see `pageRange`
    *   for how the pages still tile the list. Zero is the default and reproduces the
    *   original behaviour exactly. Page NUMBERS stay counted from the tip either way, so
