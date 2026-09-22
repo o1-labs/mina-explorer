@@ -186,13 +186,17 @@ export interface ConsensusTimeAnchor {
   slotEndTime: number;
   /** 7140 on every current network, but read rather than assumed. */
   slotsPerEpoch: number;
-  /** Slot length in ms: 90_000 on mesa/devnet, 180_000 on mainnet. */
+  /**
+   * Slot length in ms: 90_000 on devnet and mainnet since the mesa hard fork,
+   * which halved mainnet's slot from the original 180_000. Read rather than
+   * assumed — a hard fork is exactly when a hardcoded value goes wrong quietly.
+   */
   slotDuration: number;
   /**
    * Unix ms of the genesis this chain counts slots from — the daemon's
    * `genesisStateTimestamp`. `globalSlot` is exactly
-   * `floor((now - chainStartTime) / slotDuration)`, verified on all three
-   * networks, which is what makes it meaningful to show beside the slot.
+   * `floor((now - chainStartTime) / slotDuration)`, verified on both networks,
+   * which is what makes it meaningful to show beside the slot.
    *
    * On a network that has hard-forked this is the CURRENT chain's genesis, not
    * the original one — consistent with `globalSlot` being a since-hard-fork

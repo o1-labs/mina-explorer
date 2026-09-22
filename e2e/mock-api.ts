@@ -14,15 +14,16 @@ export function shouldMockApi(): boolean {
 }
 
 /**
- * URL matchers for the configured networks' endpoints. Two host families are
- * in play — o1test.net (devnet, mainnet) and minaprotocol.com (mesa) — so
- * specs that install their own route handlers should reuse these instead of
- * hardcoding one family's hostname.
+ * URL matchers for the configured networks' endpoints. Specs that install their
+ * own route handlers should reuse these instead of hardcoding a hostname.
  *
- * Archive: {devnet-,}archive-node-api.gcp.o1test.net,
- *          archive-node-api.mesa-rc.minaprotocol.com
- * Daemon:  {devnet-,mainnet-}plain-1.gcp.o1test.net/graphql,
- *          plain-1-graphql.mesa-rc.minaprotocol.com/graphql
+ * Archive: {devnet-,}archive-node-api.gcp.o1test.net
+ * Daemon:  {devnet-,mainnet-}plain-1.gcp.o1test.net/graphql
+ *
+ * Both live networks sit on o1test.net today; `minaprotocol.com` stays in the
+ * alternation because the endpoints have moved between the two host families
+ * before (mesa, since decommissioned, served from minaprotocol.com) and a
+ * matcher that silently stops matching is worse than one that is too broad.
  */
 export const ARCHIVE_URL =
   /\/\/[\w.-]*archive-node-api[\w.-]*\.(o1test\.net|minaprotocol\.com)\//;
@@ -34,7 +35,7 @@ export const DAEMON_URL =
  *
  * Matched on the `/{network}/v1/` PATH shape rather than a hostname, so a spec that points
  * a network at some other proxy deployment is still intercepted. The network segment is
- * part of the API's route, not a query parameter — `/mina-mesa/v1/blocks`.
+ * part of the API's route, not a query parameter — `/mina-mainnet/v1/blocks`.
  */
 export const REST_URL = /\/mina-[a-z0-9-]+\/v1\//;
 
@@ -115,8 +116,9 @@ function buildRestBlocksPage(params: URLSearchParams): unknown {
   //
   // The three values PARTITION the list on `isCanonical` — measured against production on
   // 2026-08-27, `CANONICAL.totalCount + ORPHANED.totalCount === ALL.totalCount` exactly on
-  // mesa, devnet and mainnet. `ORPHANED` returning [] here was the earlier reading, and it
-  // is wrong twice over: orphans ARE in `ALL` (one 50-row mesa page spans 41 heights), and
+  // devnet and mainnet (and on mesa, before it was retired). `ORPHANED` returning [] here
+  // was the earlier reading, and it is wrong twice over: orphans ARE in `ALL` (one 50-row
+  // page spanned only 41 distinct heights when measured), and
   // `ORPHANED` is the whole complement of canonical, live tip included.
   const type = params.get('type') ?? 'ALL';
   const filtered =
@@ -492,7 +494,10 @@ async function handleDaemonRequest(route: Route): Promise<void> {
     // timestamps: the bar advances the slot locally from `startTime`, and a
     // window in the distant past would make it tick out an absurd slot number.
     if (query.includes('daemonStatus')) {
-      const SLOT_DURATION = 180_000;
+      // 90 s on both live networks since the mesa hard fork. The epoch/slot the
+      // specs assert come from `slotsPerEpoch` and the pinned `globalSlot`, not
+      // from this, so it is here to match a real daemon rather than to be read.
+      const SLOT_DURATION = 90_000;
       const slotStart = Math.floor(Date.now() / SLOT_DURATION) * SLOT_DURATION;
       await route.fulfill({
         status: 200,
