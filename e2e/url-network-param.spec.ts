@@ -36,13 +36,13 @@ test.describe('URL ?network= parameter', () => {
   });
 
   test('auto-adds ?network= when missing on first visit', async ({ page }) => {
-    // No localStorage, no URL param → falls back to DEFAULT_NETWORK ('mesa')
+    // No localStorage, no URL param → falls back to DEFAULT_NETWORK ('mainnet')
     // and the sync effect should write it back to the URL.
     await page.goto('/#/blocks');
 
     await expect
       .poll(() => networkParam(page.url()), { timeout: 5000 })
-      .toBe('mesa');
+      .toBe('mainnet');
   });
 
   test('URL ?network= overrides localStorage on initial load', async ({
@@ -51,12 +51,12 @@ test.describe('URL ?network= parameter', () => {
     await page.goto('/');
     await page.evaluate(
       ([key, value]) => localStorage.setItem(key, value),
-      [NETWORK_KEY, 'mesa'],
+      [NETWORK_KEY, 'devnet'],
     );
 
     await page.goto('/#/blocks?network=mainnet');
 
-    // Header should reflect Mainnet, not Mesa.
+    // Header should reflect Mainnet, not Devnet.
     await expect(
       page.locator('header button').filter({ hasText: 'Mainnet' }).first(),
     ).toBeVisible({ timeout: 10000 });
@@ -71,7 +71,7 @@ test.describe('URL ?network= parameter', () => {
     await page.goto('/');
     await page.evaluate(
       ([key, value]) => localStorage.setItem(key, value),
-      [NETWORK_KEY, 'mesa'],
+      [NETWORK_KEY, 'devnet'],
     );
 
     await page.goto('/#/blocks?network=mainnet');
@@ -84,21 +84,21 @@ test.describe('URL ?network= parameter', () => {
       key => localStorage.getItem(key),
       NETWORK_KEY,
     );
-    expect(stored).toBe('mesa');
+    expect(stored).toBe('devnet');
   });
 
   test('network selector updates both URL param and localStorage', async ({
     page,
   }) => {
-    await page.goto('/#/blocks?network=mesa');
+    await page.goto('/#/blocks?network=mainnet');
     await expect(
-      page.locator('header button').filter({ hasText: 'Mesa' }).first(),
+      page.locator('header button').filter({ hasText: 'Mainnet' }).first(),
     ).toBeVisible({ timeout: 10000 });
 
     // Open the selector and pick Devnet.
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
     await page.locator('button:has-text("Devnet")').first().click();

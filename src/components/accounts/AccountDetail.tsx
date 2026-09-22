@@ -24,7 +24,6 @@ function getMinaScanNetwork(networkId?: string): string {
     case 'mainnet':
       return 'mainnet';
     case 'devnet':
-    case 'mesa':
       return 'devnet';
     default:
       return 'mainnet';

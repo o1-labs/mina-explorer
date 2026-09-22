@@ -60,8 +60,14 @@ export interface TimePeriodOption {
   getDateRange: () => { start: Date; end: Date };
 }
 
-// Mina epoch is ~14 days (7140 slots * 3 minutes)
-const EPOCH_DURATION_MS = 7140 * 3 * 60 * 1000;
+// A Mina epoch is 7140 slots. Since the mesa hard fork a slot is 90 s on both
+// devnet and mainnet — mainnet's was 180 s before it — so an epoch is ~7.4 days,
+// not the ~14.9 this constant assumed while it multiplied by 3 minutes. The
+// wrong value did not error; it just quietly made the "last epoch" preset span
+// two epochs of block production.
+const SLOTS_PER_EPOCH = 7140;
+const SLOT_DURATION_MS = 90 * 1000;
+const EPOCH_DURATION_MS = SLOTS_PER_EPOCH * SLOT_DURATION_MS;
 
 export const TIME_PERIOD_OPTIONS: TimePeriodOption[] = [
   {
@@ -90,7 +96,7 @@ export const TIME_PERIOD_OPTIONS: TimePeriodOption[] = [
   },
   {
     value: 'epoch',
-    label: 'Last epoch (~14 days)',
+    label: 'Last epoch (~7 days)',
     getDateRange: () => ({
       start: new Date(Date.now() - EPOCH_DURATION_MS),
       end: new Date(),

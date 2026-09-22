@@ -14,7 +14,7 @@ export interface NetworkConfig {
   daemonEndpoint: string;
   /**
    * mina-explorer-api REST base, INCLUDING the network path segment
-   * (e.g. `https://<proxy>/mina-mesa`). Optional: a network without it keeps using the
+   * (e.g. `https://<proxy>/mina-devnet`). Optional: a network without it keeps using the
    * archive GraphQL path untouched, which is what makes this rollout per-network and
    * reversible by config alone.
    *
@@ -23,8 +23,13 @@ export interface NetworkConfig {
    * `src/services/api/rest.ts`.
    *
    * The network segment is part of the value rather than derived, because this app's ids
-   * (`mesa`, `devnet`, `mainnet`) are not the API's (`mina-mesa`, `mina-devnet`,
-   * `mina-mainnet`) and a mapping table is a thing that goes stale silently.
+   * (`devnet`, `mainnet`) are not the API's (`mina-devnet`, `mina-mainnet`) and a mapping
+   * table is a thing that goes stale silently.
+   *
+   * Only the BLOCKS LIST reads through here today; every other surface is still archive or
+   * daemon. The rollout went testnet-first — it landed on a testnet as the then-default
+   * network, so a regression cost nobody a real answer, and mainnet followed once the
+   * paging had been verified against each chain's real end-of-range.
    */
   restEndpoint?: string;
   isTestnet: boolean;
@@ -46,22 +51,6 @@ declare global {
 }
 
 const COMPILED_NETWORKS: Record<string, NetworkConfig> = {
-  mesa: {
-    id: 'mesa',
-    name: 'mesa',
-    displayName: 'Mesa Trail',
-    archiveEndpoint: 'https://archive-node-api.mesa-rc.minaprotocol.com',
-    daemonEndpoint: 'https://plain-1-graphql.mesa-rc.minaprotocol.com/graphql',
-    // Mesa led onto mina-explorer-api, as the default network and a testnet, so a
-    // regression cost nobody a real answer. devnet and mainnet followed once it had run in
-    // the open and the paging was verified against each chain's real end-of-range.
-    //
-    // Only the BLOCKS LIST reads through here today; every other surface is still archive
-    // or daemon. See src/services/api/rest.ts, and note the endpoint carries the network
-    // segment because this app's ids are not the API's.
-    restEndpoint: 'https://mina-explorer-proxy.minaprotocol.com/mina-mesa',
-    isTestnet: true,
-  },
   devnet: {
     id: 'devnet',
     name: 'devnet',
@@ -94,7 +83,7 @@ const COMPILED_NETWORKS: Record<string, NetworkConfig> = {
   },
 };
 
-const COMPILED_DEFAULT_NETWORK = 'mesa';
+const COMPILED_DEFAULT_NETWORK = 'mainnet';
 
 const RUNTIME =
   (typeof window !== 'undefined' && window.__MINA_EXPLORER_CONFIG__) || {};

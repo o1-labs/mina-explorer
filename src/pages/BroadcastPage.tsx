@@ -200,7 +200,7 @@ export function BroadcastPage(): ReactNode {
               </pre>
               <pre className="mt-1 overflow-x-auto rounded-md bg-accent p-3 text-xs">
                 {`import Client from 'mina-signer';
-// Use 'testnet' for mesa/devnet, 'mainnet' for mainnet
+// Use 'testnet' for devnet, 'mainnet' for mainnet
 const client = new Client({ network: 'testnet' });
 
 const signed = client.signPayment({

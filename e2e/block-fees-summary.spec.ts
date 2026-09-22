@@ -58,7 +58,7 @@ test.describe('block fees summary (#70)', () => {
               {
                 blockHeight: HEIGHT,
                 stateHash:
-                  '3NKmesaNoExtBlock0000000000000000000000000000000000',
+                  '3NKnoExtBlock000000000000000000000000000000000000000',
                 creator: B62,
                 dateTime: '2026-03-01T00:00:00.000Z',
                 transactions: { coinbase: '720000000000' },
@@ -94,10 +94,10 @@ test.describe('block fees summary (#70)', () => {
             block: {
               // Real daemons always return the block's stateHash; enrichment
               // (#86) only merges when it matches the displayed block.
-              stateHash: '3NKmesaNoExtBlock0000000000000000000000000000000000',
+              stateHash: '3NKnoExtBlock000000000000000000000000000000000000000',
               protocolState: {
                 previousStateHash:
-                  '3NKmesaNoExtParent000000000000000000000000000000000',
+                  '3NKnoExtParent00000000000000000000000000000000000000',
               },
               transactions: {
                 coinbase: '720000000000',

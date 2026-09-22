@@ -205,10 +205,10 @@ test.describe('Mina Explorer', () => {
   test('network selector shows current network', async ({ page }) => {
     await page.goto('/');
 
-    // Check that network selector button is visible with Mesa text (use first for desktop)
+    // Check that network selector button is visible with Mainnet text (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: 'Mesa' })
+      .filter({ hasText: 'Mainnet' })
       .first();
     await expect(networkButton).toBeVisible();
   });
@@ -256,32 +256,45 @@ test.describe('Network Picker', () => {
     // Click on network selector dropdown (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await expect(networkButton).toBeVisible();
     await networkButton.click();
 
-    // Check that all three networks are listed in dropdown
-    await expect(page.locator('button:has-text("Mesa")').first()).toBeVisible();
+    // Check that both networks are listed in dropdown
     await expect(
       page.locator('button:has-text("Devnet")').first(),
     ).toBeVisible();
     await expect(
       page.locator('button:has-text("Mainnet")').first(),
     ).toBeVisible();
+
+    // Mesa was decommissioned — it must not come back as a selectable option.
+    await expect(page.locator('button:has-text("Mesa")')).toHaveCount(0);
   });
 
-  test('default network is Mesa with testnet badge', async ({ page }) => {
+  test('default network is Mainnet with no testnet badge', async ({ page }) => {
     await page.goto('/');
 
-    // Check that Mesa is selected by default (use first for desktop)
+    // Check that Mainnet is selected by default (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: 'Mesa' })
+      .filter({ hasText: 'Mainnet' })
       .first();
     await expect(networkButton).toBeVisible();
 
-    // Check that testnet badge is shown
+    // Mainnet is the production chain, so the badge must be absent.
+    await expect(networkButton.locator('text=Testnet')).toHaveCount(0);
+  });
+
+  test('testnet badge is shown for Devnet', async ({ page }) => {
+    await page.goto('/#/blocks?network=devnet');
+
+    const networkButton = page
+      .locator('header button')
+      .filter({ hasText: 'Devnet' })
+      .first();
+    await expect(networkButton).toBeVisible({ timeout: 10000 });
     await expect(networkButton.locator('text=Testnet')).toBeVisible();
   });
 
@@ -296,7 +309,7 @@ test.describe('Network Picker', () => {
     // Click on network selector (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -329,7 +342,7 @@ test.describe('Network Picker', () => {
     // Click on network selector (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -353,7 +366,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -405,7 +418,7 @@ test.describe('Network Picker', () => {
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -426,7 +439,7 @@ test.describe('Network Picker', () => {
     // Switch to Mainnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -458,22 +471,22 @@ test.describe('Network Picker', () => {
       timeout: 15000,
     });
 
-    // Get Mesa block height (wait for a number to appear)
+    // Get Mainnet block height (wait for a number to appear)
     await expect(async () => {
       const text = await page.locator('text=/[\\d,]+/').first().textContent();
       expect(text).toMatch(/[\d,]+/);
     }).toPass({ timeout: 15000 });
 
-    const mesaHeight = await page
+    const mainnetHeight = await page
       .locator('text=/[\\d,]+/')
       .first()
       .textContent();
-    console.log('Mesa block height:', mesaHeight);
+    console.log('Mainnet block height:', mainnetHeight);
 
     // Switch to Devnet (use first for desktop)
     const networkButton = page
       .locator('header button')
-      .filter({ hasText: /Mesa|Devnet|Mainnet/ })
+      .filter({ hasText: /Devnet|Mainnet/ })
       .first();
     await networkButton.click();
 
@@ -490,7 +503,7 @@ test.describe('Network Picker', () => {
         .locator('text=/[\\d,]+/')
         .first()
         .textContent();
-      expect(devnetHeight).not.toBe(mesaHeight);
+      expect(devnetHeight).not.toBe(mainnetHeight);
       expect(devnetHeight).not.toBe('-');
     }).toPass({ timeout: 15000 });
 
@@ -500,8 +513,8 @@ test.describe('Network Picker', () => {
       .textContent();
     console.log('Devnet block height:', devnetHeight);
 
-    // Devnet should have a different block height than Mesa
-    expect(devnetHeight).not.toBe(mesaHeight);
+    // Devnet should have a different block height than Mainnet
+    expect(devnetHeight).not.toBe(mainnetHeight);
   });
 });
 
@@ -1246,12 +1259,19 @@ test.describe('Mobile Menu', () => {
     // Click to expand network list
     await networkButton.click();
 
+    // Scope to the mobile selector's own wrapper. A page-wide match would also
+    // hit the HIDDEN desktop selector button, which reads "Mainnet" now that
+    // mainnet is the default network — the assertion would then pass or fail on
+    // the wrong element. Inside the wrapper the trigger comes first and the
+    // options follow it, so an option is `.last()`.
+    const mobileSelector = networkButton.locator('xpath=..');
+
     // Network options should be visible inline (not clipped)
     await expect(
-      page.locator('button').filter({ hasText: 'Devnet' }).first(),
+      mobileSelector.locator('button').filter({ hasText: 'Devnet' }).last(),
     ).toBeVisible({ timeout: 5000 });
     await expect(
-      page.locator('button').filter({ hasText: 'Mainnet' }).first(),
+      mobileSelector.locator('button').filter({ hasText: 'Mainnet' }).last(),
     ).toBeVisible();
   });
 
@@ -1275,8 +1295,14 @@ test.describe('Mobile Menu', () => {
     );
     await networkButton.click();
 
-    // Switch to Devnet
-    await page.locator('button').filter({ hasText: 'Devnet' }).first().click();
+    // Switch to Devnet — scoped to the mobile selector for the same reason as
+    // the test above: the hidden desktop selector is also on the page.
+    await networkButton
+      .locator('xpath=..')
+      .locator('button')
+      .filter({ hasText: 'Devnet' })
+      .last()
+      .click();
 
     // Verify Devnet is now selected
     await expect(networkButton).toContainText('Devnet', { timeout: 5000 });
@@ -1287,9 +1313,7 @@ test.describe('Security Hardening', () => {
   test('CSP meta tag is present in the page', async ({ page }) => {
     await page.goto('/');
 
-    const cspMeta = page.locator(
-      'meta[http-equiv="Content-Security-Policy"]',
-    );
+    const cspMeta = page.locator('meta[http-equiv="Content-Security-Policy"]');
     await expect(cspMeta).toHaveCount(1);
 
     const content = await cspMeta.getAttribute('content');

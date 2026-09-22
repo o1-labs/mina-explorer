@@ -10,8 +10,8 @@ import accountFixture from './fixtures/account.json' with { type: 'json' };
 // a realistic remote custom endpoint. The bug is about routing, not the scheme.
 const CUSTOM_URL = 'https://custom-daemon.test/graphql';
 
-// Every preset daemon URL contains "plain" and ends in "/graphql" (mesa,
-// devnet, mainnet). A hit here means a daemon call leaked to a preset network
+// Every preset daemon URL contains "plain" and ends in "/graphql" (devnet,
+// mainnet). A hit here means a daemon call leaked to a preset network
 // — the bug this fixes. Kept broad on purpose so it catches every preset host,
 // not just the current default network.
 const PRESET_DAEMON = /plain.*graphql/;

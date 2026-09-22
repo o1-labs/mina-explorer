@@ -1,8 +1,8 @@
 /**
  * The blocks list reads from mina-explorer-api, not the archive.
  *
- * mesa is the first network flipped onto the REST backend (`restEndpoint` in
- * networks.ts). These specs exist because the flip is INVISIBLE when it goes wrong: the
+ * Every network carries a `restEndpoint` (see networks.ts) and reads this surface through
+ * it. These specs exist because the flip is INVISIBLE when it goes wrong: the
  * page renders ten plausible blocks either way, so "the blocks page loads" keeps passing
  * whether the data came from the API, from the archive, or from a stale filter. Each test
  * below pins something that a rendered-content assertion cannot see.
@@ -124,7 +124,7 @@ async function routeBoth(
 /**
  * The tip block's row link.
  *
- * Matched by ROLE, not by text: the page also prints "432,150 total blocks on Mesa Trail",
+ * Matched by ROLE, not by text: the page also prints "432,150 total blocks on Mainnet",
  * so a plain text match on the height is ambiguous and fails strict mode.
  */
 function tipRow(page: Page) {
@@ -132,7 +132,9 @@ function tipRow(page: Page) {
 }
 
 test.describe('blocks list via mina-explorer-api', () => {
-  test('mesa asks the REST backend and not the archive', async ({ page }) => {
+  test('the blocks list asks the REST backend and not the archive', async ({
+    page,
+  }) => {
     const { restCalls, archiveBlockQueries } = await routeBoth(page);
 
     await page.goto('/');
@@ -158,8 +160,8 @@ test.describe('blocks list via mina-explorer-api', () => {
     const blockCall = restCalls.find(c => c.path === 'blocks');
     expect(blockCall).toBeDefined();
 
-    // `CANONICAL` is the k-FINALIZED prefix, not the best chain — measured at 14 h behind
-    // on mesa and 35 h on mainnet. It shipped that way and rendered perfectly: ten real
+    // `CANONICAL` is the k-FINALIZED prefix, not the best chain — measured at 35 h behind
+    // on mainnet, 13 h on devnet. It shipped that way and rendered perfectly: ten real
     // blocks, every field correct, the whole page a day stale. Nothing about the rendered
     // output distinguishes the two, so the request itself is the only place to assert it.
     expect(blockCall?.params.get('type')).toBe('ALL');
@@ -229,7 +231,8 @@ test.describe('blocks list via mina-explorer-api', () => {
   }) => {
     // The trap this pins: the API caps `totalElements` at 10 000 for Blockberry parity and
     // derives `totalPages` from that cap, while `totalCount` carries the true row count.
-    // Measured on mesa: totalCount 16 876 against totalPages 400. Deep paging works fine
+    // Measured on mesa (a testnet since retired): totalCount 16 876 against totalPages 400.
+    // Deep paging works fine
     // past the cap, so a reader that trusted totalElements/totalPages would hide a third of
     // the chain behind a control claiming it does not exist — with no error anywhere.
     const TOTAL = 16876;
