@@ -11,18 +11,30 @@ export class ApiError extends Error {
   }
 }
 
+// graphql-js validation messages, for servers that send no error code.
+const VALIDATION_MESSAGE =
+  /Cannot query field|is not defined by type|Unknown argument/;
+
 /**
- * True when the server answered and rejected the query itself (GraphQL errors
- * in the body), e.g. an archive that lacks a field. Only then can a smaller
- * query tier succeed where this one failed.
+ * True when the server validated the query and rejected its shape, e.g. an
+ * archive that lacks a field or the inBestChain filter. Only then can a
+ * smaller query tier succeed where this one failed.
  *
- * Anything else (rate limit, HTTP 5xx, network, timeout) would fail the next
- * tier too, so query-tier fallbacks must rethrow it: falling through only adds
- * requests against an already-limited endpoint, and a lower tier that slips in
- * once the limit clears renders reduced data as if it were the real answer.
+ * Anything else (a rate limit, even one with a JSON `errors` body; a masked
+ * resolver or database failure; network; timeout) is not about the query's
+ * shape, so query-tier fallbacks must rethrow it: falling through only adds
+ * requests against a struggling endpoint, and a lower tier that slips in once
+ * it recovers renders reduced data, or "not found", as if it were the answer.
  */
 export function isQueryRejection(error: unknown): boolean {
-  return error instanceof ApiError && (error.errors?.length ?? 0) > 0;
+  return (
+    error instanceof ApiError &&
+    (error.errors ?? []).some(
+      e =>
+        e.extensions?.code === 'GRAPHQL_VALIDATION_FAILED' ||
+        VALIDATION_MESSAGE.test(e.message),
+    )
+  );
 }
 
 export class GraphQLClient {

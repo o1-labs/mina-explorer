@@ -176,12 +176,7 @@ export function ZkAppsPage(): ReactNode {
           );
           extractNested(data);
         } catch (nestedError) {
-          const errorMessage =
-            nestedError instanceof Error ? nestedError.message : '';
-          if (
-            errorMessage.includes('zkappCommands') ||
-            errorMessage.includes('Cannot query field')
-          ) {
+          if (isQueryRejection(nestedError)) {
             // Try flat schema
             try {
               const data = await client.query<ZkAppActivityFlatResponse>(

@@ -7,6 +7,7 @@ export interface GraphQLError {
   message: string;
   locations?: { line: number; column: number }[];
   path?: string[];
+  extensions?: { code?: string | undefined } | undefined;
 }
 
 export interface NetworkState {
