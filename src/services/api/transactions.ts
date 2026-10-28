@@ -1,4 +1,4 @@
-import { getClient, type GraphQLClient } from './client';
+import { getClient, isQueryRejection, type GraphQLClient } from './client';
 import { queryDaemon, isCorsError, MAX_DAEMON_BLOCKS } from './daemon';
 import {
   supportsBestChainFilter,
@@ -466,9 +466,11 @@ export async function fetchTransactionByHash(
   };
 
   // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps).
-  // With bestChainOnly, a filter validation error aborts the chain (every
-  // filtered tier fails identically) so the caller can degrade; any other
-  // error falls through to the next tier as before.
+  // A transport failure (rate limit, network, timeout) aborts the chain: every
+  // tier would fail the same way, and returning null would report a real
+  // transaction as not found. With bestChainOnly, a filter validation error
+  // also aborts it so the caller can degrade; any other rejected query falls
+  // through to the next tier.
   const searchConfirmedBlocks = async (
     bestChainOnly: boolean,
   ): Promise<TransactionDetail | null> => {
@@ -481,6 +483,7 @@ export async function fetchTransactionByHash(
       const result = searchBlocks(data);
       if (result) return result;
     } catch (error) {
+      if (!isQueryRejection(error)) throw error;
       if (bestChainOnly && isBestChainFilterError(error)) throw error;
       const errorMessage = error instanceof Error ? error.message : '';
       if (
@@ -502,6 +505,7 @@ export async function fetchTransactionByHash(
       const result = searchBlocksFlat(data);
       if (result) return result;
     } catch (error) {
+      if (!isQueryRejection(error)) throw error;
       if (bestChainOnly && isBestChainFilterError(error)) throw error;
       // Flat query failed — try basic (no zkApp data)
     }
@@ -515,7 +519,10 @@ export async function fetchTransactionByHash(
       const result = searchBlocks(data);
       if (result) return result;
     } catch (basicError) {
-      if (bestChainOnly && isBestChainFilterError(basicError)) {
+      if (
+        !isQueryRejection(basicError) ||
+        (bestChainOnly && isBestChainFilterError(basicError))
+      ) {
         throw basicError;
       }
       console.error('[API] Error with basic transaction search:', basicError);

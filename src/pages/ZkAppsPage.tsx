@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { Sparkles, ExternalLink } from 'lucide-react';
 import { HashLink, LoadingSpinner } from '@/components/common';
 import { formatTimeAgo } from '@/utils/formatters';
-import { getClient } from '@/services/api/client';
+import { getClient, isQueryRejection } from '@/services/api/client';
 import { useNetwork, useRequestGeneration } from '@/hooks';
 
 interface ZkAppActivity {
@@ -189,7 +189,10 @@ export function ZkAppsPage(): ReactNode {
                 { limit: 500 },
               );
               extractFlat(data);
-            } catch {
+            } catch (flatError) {
+              // Only a rejected query means the endpoint lacks zkApp data; a
+              // rate limit or network failure must not be reported as that.
+              if (!isQueryRejection(flatError)) throw flatError;
               if (gen.isCurrent(token)) {
                 setActivities([]);
                 setZkApps([]);
