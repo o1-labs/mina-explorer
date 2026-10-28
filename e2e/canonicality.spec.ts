@@ -156,7 +156,7 @@ test.describe('Block canonicality on forks (issue #86)', () => {
     // what a self-hosted user pointing at their own archive gets.
     await page.addInitScript((url: string) => {
       window.localStorage.setItem('mina-explorer-custom-endpoint', url);
-    }, 'https://devnet-archive-node-api.gcp.o1test.net');
+    }, 'https://devnet-archive-node-api.minaprotocol.com');
     await page.goto('/#/blocks');
 
     // Exactly one row at the fork height: the best-chain block, not the

@@ -17,13 +17,13 @@ export function shouldMockApi(): boolean {
  * URL matchers for the configured networks' endpoints. Specs that install their
  * own route handlers should reuse these instead of hardcoding a hostname.
  *
- * Archive: {devnet-,}archive-node-api.gcp.o1test.net
+ * Archive: {devnet-,}archive-node-api.minaprotocol.com
  * Daemon:  {devnet-,mainnet-}plain-1.gcp.o1test.net/graphql
  *
- * Both live networks sit on o1test.net today; `minaprotocol.com` stays in the
- * alternation because the endpoints have moved between the two host families
- * before (mesa, since decommissioned, served from minaprotocol.com) and a
- * matcher that silently stops matching is worse than one that is too broad.
+ * Archive and daemon sit on different host families today, so both stay in
+ * each alternation: the endpoints have moved between the two before (archive
+ * from o1test.net to minaprotocol.com, mesa before that) and a matcher that
+ * silently stops matching is worse than one that is too broad.
  */
 export const ARCHIVE_URL =
   /\/\/[\w.-]*archive-node-api[\w.-]*\.(o1test\.net|minaprotocol\.com)\//;
