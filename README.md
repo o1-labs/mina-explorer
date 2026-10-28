@@ -95,8 +95,8 @@ src/
 
 | Network | Archive | Daemon |
 |---------|---------|--------|
-| **Mainnet** | `archive-node-api.gcp.o1test.net` | `mainnet-plain-1.gcp.o1test.net/graphql` |
-| **Devnet** | `devnet-archive-node-api.gcp.o1test.net` | `devnet-plain-1.gcp.o1test.net/graphql` |
+| **Mainnet** | `archive-node-api.minaprotocol.com` | `mainnet-plain-1.gcp.o1test.net/graphql` |
+| **Devnet** | `devnet-archive-node-api.minaprotocol.com` | `devnet-plain-1.gcp.o1test.net/graphql` |
 
 ## Tech Stack
 
