@@ -3,7 +3,7 @@
  * Provides aggregated statistics about network activity
  */
 
-import { getClient } from './client';
+import { getClient, isQueryRejection } from './client';
 
 /**
  * Maximum number of blocks fetched per analytics query. On busy networks a
@@ -139,7 +139,8 @@ export async function fetchBlocksForAnalytics(
       limit: ANALYTICS_BLOCK_LIMIT,
       dateTime_gte: startDate.toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (!isQueryRejection(error)) throw error;
     // Fall back to basic query without zkappCommands
     try {
       response = await client.query<BlockAnalyticsData>(
@@ -149,7 +150,8 @@ export async function fetchBlocksForAnalytics(
           dateTime_gte: startDate.toISOString(),
         },
       );
-    } catch {
+    } catch (basicError) {
+      if (!isQueryRejection(basicError)) throw basicError;
       // Fall back to minimal query (archive nodes without txFees/userCommands)
       console.log(
         '[Analytics] Using minimal query - transaction data not available',

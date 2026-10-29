@@ -1,4 +1,4 @@
-import { getClient, type GraphQLClient } from './client';
+import { getClient, isQueryRejection, type GraphQLClient } from './client';
 import { queryDaemon, isCorsError, MAX_DAEMON_BLOCKS } from './daemon';
 import {
   supportsBestChainFilter,
@@ -466,9 +466,11 @@ export async function fetchTransactionByHash(
   };
 
   // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps).
-  // With bestChainOnly, a filter validation error aborts the chain (every
-  // filtered tier fails identically) so the caller can degrade; any other
-  // error falls through to the next tier as before.
+  // Only a rejected query (isQueryRejection) falls through to the next tier.
+  // Any other failure (rate limit, server error, network, timeout) aborts the
+  // chain, because returning null would report a real transaction as not
+  // found. With bestChainOnly, a filter validation error also aborts it so
+  // the caller can degrade.
   const searchConfirmedBlocks = async (
     bestChainOnly: boolean,
   ): Promise<TransactionDetail | null> => {
@@ -481,16 +483,9 @@ export async function fetchTransactionByHash(
       const result = searchBlocks(data);
       if (result) return result;
     } catch (error) {
+      if (!isQueryRejection(error)) throw error;
       if (bestChainOnly && isBestChainFilterError(error)) throw error;
-      const errorMessage = error instanceof Error ? error.message : '';
-      if (
-        errorMessage.includes('zkappCommands') ||
-        errorMessage.includes('Cannot query field')
-      ) {
-        // Nested schema not supported — skip to flat and basic below
-      } else {
-        console.error('[API] Error searching for transaction:', error);
-      }
+      // Nested schema not supported — skip to flat and basic below
     }
 
     // Try flat query (archive with ENABLE_BLOCK_TRANSACTION_DETAILS)
@@ -502,6 +497,7 @@ export async function fetchTransactionByHash(
       const result = searchBlocksFlat(data);
       if (result) return result;
     } catch (error) {
+      if (!isQueryRejection(error)) throw error;
       if (bestChainOnly && isBestChainFilterError(error)) throw error;
       // Flat query failed — try basic (no zkApp data)
     }
@@ -515,7 +511,10 @@ export async function fetchTransactionByHash(
       const result = searchBlocks(data);
       if (result) return result;
     } catch (basicError) {
-      if (bestChainOnly && isBestChainFilterError(basicError)) {
+      if (
+        !isQueryRejection(basicError) ||
+        (bestChainOnly && isBestChainFilterError(basicError))
+      ) {
         throw basicError;
       }
       console.error('[API] Error with basic transaction search:', basicError);
@@ -545,17 +544,6 @@ export async function fetchTransactionByHash(
 // UI must disclose this window (#89) — exported so the copy stays in sync
 // with the actual query limit (mirrors BLOCK_HASH_SEARCH_WINDOW from #73).
 export const ACCOUNT_TX_SEARCH_WINDOW = 500;
-
-// Schema errors mean the endpoint doesn't support the query shape (archive
-// flat vs daemon nested vs no zkApp support) — the caller should fall through
-// to the next query tier. Anything else (timeout, HTTP 5xx, network) is a
-// real failure that must surface to the UI.
-function isSchemaError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : '';
-  return (
-    message.includes('zkappCommands') || message.includes('Cannot query field')
-  );
-}
 
 // Account transaction type for history
 export interface AccountTransaction {
@@ -695,7 +683,7 @@ export async function fetchAccountTransactions(
   };
 
   // Fallback chain: nested (daemon) → flat (archive) → basic (no zkApps).
-  // Schema errors ("Cannot query field") fall through to the next tier;
+  // Rejected queries (isQueryRejection) fall through to the next tier;
   // any other failure (timeout, HTTP 5xx, network) propagates so the UI
   // shows its error state instead of a false "No transactions found" (#89).
   try {
@@ -705,7 +693,7 @@ export async function fetchAccountTransactions(
     );
     extractTransactions(data);
   } catch (error) {
-    if (!isSchemaError(error)) throw error;
+    if (!isQueryRejection(error)) throw error;
 
     // Try flat schema
     try {
@@ -715,7 +703,7 @@ export async function fetchAccountTransactions(
       );
       extractTransactionsFlat(data);
     } catch (flatError) {
-      if (!isSchemaError(flatError)) throw flatError;
+      if (!isQueryRejection(flatError)) throw flatError;
 
       // Last resort: basic query (no zkApp data). If this also fails, no
       // tier produced data — let the error reach the hook.
@@ -973,8 +961,7 @@ export async function fetchTransactionsPaginated(
       source: 'archive',
     };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : '';
-    if (msg.includes('Cannot query field')) {
+    if (isQueryRejection(error)) {
       // Archive doesn't support transaction fields — fall back to daemon
       console.log(
         '[API] Archive does not support transaction fields, falling back to daemon...',

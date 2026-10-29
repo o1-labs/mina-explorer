@@ -1,4 +1,4 @@
-import { getClient, type GraphQLClient } from './client';
+import { getClient, isQueryRejection, type GraphQLClient } from './client';
 import {
   fetchBlocksRangeRest,
   fetchBlocksRest,
@@ -482,7 +482,8 @@ export interface BlocksPage {
 
 // Try each field set in order, first with the best-chain filter (excludes
 // orphaned fork blocks), then unfiltered as a degraded fallback for archives
-// that predate the filter.
+// that predate the filter. Only a rejected query moves on to the next variant;
+// anything else (rate limit, server error, network, timeout) is rethrown.
 async function fetchBlocksListWithFallback(
   client: GraphQLClient,
   fieldSets: BlockListFieldSet[],
@@ -500,6 +501,7 @@ async function fetchBlocksListWithFallback(
           variables,
         );
       } catch (error) {
+        if (!isQueryRejection(error)) throw error;
         console.log(
           `[API] ${fieldSet} best-chain blocks query failed, trying next variant...`,
         );
@@ -528,6 +530,7 @@ async function fetchBlocksListWithFallback(
       }
       return data;
     } catch (error) {
+      if (!isQueryRejection(error)) throw error;
       console.log(
         `[API] ${fieldSet} blocks query failed, trying next variant...`,
       );
@@ -886,9 +889,12 @@ async function queryBlocksAtHeight(
       canonicalMax,
     };
   } catch (error) {
-    // A filter error would only repeat on the basic variant; let the caller
-    // handle the unfiltered fallback instead.
-    if (bestChainOnly && isBestChainFilterError(error)) {
+    // Only a rejected query can succeed as the basic variant. Anything else,
+    // and a filter error (the caller degrades to unfiltered), goes up.
+    if (
+      !isQueryRejection(error) ||
+      (bestChainOnly && isBestChainFilterError(error))
+    ) {
       throw error;
     }
     const data = await client.query<BlocksResponse>(
@@ -972,12 +978,14 @@ export async function fetchBlockByHeight(
 ): Promise<BlockDetail | null> {
   const client = getClient();
 
-  let block: BlockDetail | null = null;
-  try {
-    block = await resolveBlockAtHeight(client, blockHeight, expectedStateHash);
-  } catch (archiveError) {
-    console.log('[API] Archive block query failed:', archiveError);
-  }
+  // An archive failure propagates: only a block the archive answered without
+  // is "not found". Swallowing a rate limit or network error here used to
+  // render "Block not found" for a block that exists.
+  const block = await resolveBlockAtHeight(
+    client,
+    blockHeight,
+    expectedStateHash,
+  );
 
   if (!block) {
     return null;
